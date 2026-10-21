@@ -48,7 +48,7 @@ fn main() {
                 match window_vibrancy::apply_acrylic(&main, Some((9, 9, 12, 150))) {
                     Ok(()) => state.journal.push(&handle, "ui", "акриловый блюр включён"),
                     Err(error) => state.journal.push(&handle, "ui", &format!("блюр недоступен: {error}")),
-                }
+                };
             }
 
             // 3. The overlay cursor must never steal hit-testing from real windows.
