@@ -55,12 +55,14 @@ fn main() {
                     window_vibrancy::apply_blur(&main, Some((9, 9, 12, 150)))
                 };
                 match effect {
-                    Ok(()) => state.journal.push(&handle, "ui", &format!("блюр включён (build {build})")),
+                    Ok(()) => {
+                        state.journal.push(&handle, "ui", &format!("блюр включён (build {build})"));
+                    }
                     Err(error) => {
                         state.set_blur_enabled(false);
                         state.journal.push(&handle, "ui", &format!("блюр недоступен: {error}"));
                     }
-                };
+                }
                 shape::apply(&main, state.blur_enabled());
             }
 
