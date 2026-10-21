@@ -269,7 +269,8 @@ pub fn run(sink: &dyn CursorSink, actions: &[Value]) -> Outcome {
                 let x = number(action.get("x"), cursor_x as i64) as i32;
                 let y = number(action.get("y"), cursor_y as i64) as i32;
                 move_to(sink, x, y, 0.0);
-                target(x, y).and_then(|hwnd| winapi::post_wheel_root(hwnd, x, y, number(action.get("clicks"), 0) as i32))
+                target(x, y)
+                    .and_then(|hwnd| winapi::post_wheel_root(hwnd, x, y, number(action.get("clicks"), 0) as i32).map_err(|error| error.0))
             }
             "dragTo" => drag(
                 sink,

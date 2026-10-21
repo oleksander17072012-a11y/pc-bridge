@@ -392,6 +392,12 @@ pub fn capture(max_width: u32) -> Result<Shot, String> {
 #[derive(Debug)]
 pub struct InputError(pub String);
 
+impl From<InputError> for String {
+    fn from(error: InputError) -> String {
+        error.0
+    }
+}
+
 impl std::fmt::Display for InputError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&self.0)
