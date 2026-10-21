@@ -94,10 +94,12 @@
   .btn.small { padding: 5px 9px; font-size: 11.5px; border-radius: 8px; }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
-  .stat { background: #0b0b0f; border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 10px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .stat { background: #0b0b0f; border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; min-width: 0; }
   .stat .k { color: var(--muted); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
-  .stat .v { margin-top: 4px; font-size: 13.5px; word-break: break-all; font-variant-numeric: tabular-nums; }
+  .stat .v { margin-top: 4px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .stat .v.clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mono { font-family: "Cascadia Mono", "Consolas", monospace; font-size: 12px; }
 
   .journal { display: flex; flex-direction: column; gap: 1px; max-height: 260px; overflow: auto; }
@@ -154,6 +156,7 @@
       <textarea id="pairing" readonly spellcheck="false"></textarea>
       <div class="row" style="margin-top:10px">
         <button class="btn primary" id="copyBtn">📋 Копировать ключ</button>
+        <button class="btn ghost" id="revealBtn">👁 Показать ключ</button>
         <button class="btn" id="rotateBtn">🎲 Новый ключ</button>
         <button class="btn ghost" id="tunnelBtn">⟳ Обновить туннель</button>
       </div>
@@ -162,7 +165,7 @@
     <section class="card">
       <h2>Состояние</h2>
       <div class="grid">
-        <div class="stat"><div class="k">Туннель</div><div class="v mono" id="sTunnel">—</div></div>
+        <div class="stat"><div class="k">Туннель</div><div class="v mono clip" id="sTunnel" title="">—</div></div>
         <div class="stat"><div class="k">Локальный релей</div><div class="v mono" id="sPort">—</div></div>
         <div class="stat"><div class="k">Хост</div><div class="v" id="sHost">—</div></div>
         <div class="stat"><div class="k">Работает</div><div class="v" id="sUptime">—</div></div>
@@ -210,6 +213,7 @@
   const $ = (id) => document.getElementById(id);
   let state = null;
   let journalEntries = [];
+  let keyVisible = false;
   let toastTimer = null;
 
   function toast(message) {
@@ -235,11 +239,21 @@
     return `${s} с`;
   }
 
+  function pairingView() {
+    const block = state?.pairing || "";
+    if (!block || keyVisible) return block;
+    // Mask the secret on screen: the full block is still what "Копировать" puts on the clipboard.
+    return block.replace(/key=([0-9a-f]{4})[0-9a-f]+([0-9a-f]{4})/i, "key=$1••••••••••••$2");
+  }
+
   function renderState(next) {
     if (!next) return;
     state = next;
-    $("pairing").value = next.pairing || "";
-    $("sTunnel").textContent = next.tunnel_url || "нет связи";
+    $("pairing").value = pairingView();
+    $("revealBtn").textContent = keyVisible ? "🙈 Скрыть ключ" : "👁 Показать ключ";
+    const tunnelHost = (next.tunnel_url || "").replace(/^https?:\/\//, "");
+    $("sTunnel").textContent = tunnelHost || "нет связи";
+    $("sTunnel").title = next.tunnel_url || "туннель ещё не поднялся";
     $("sTunnel").style.color = next.tunnel_url ? "var(--green)" : "var(--red)";
     $("sPort").textContent = next.port ? `127.0.0.1:${next.port}` : "—";
     $("sHost").textContent = next.hostname || "—";
@@ -335,17 +349,28 @@
       await navigator.clipboard.writeText(block);
       toast("Ключ скопирован в буфер обмена");
     } catch (error) {
-      const area = $("pairing");
-      area.select();
+      // Fallback must copy the real block, not the masked one shown in the textarea.
+      const helper = document.createElement("textarea");
+      helper.value = state?.pairing || "";
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.select();
       document.execCommand("copy");
+      helper.remove();
       toast("Ключ скопирован (fallback)");
     }
   });
 
+  $("revealBtn").addEventListener("click", () => {
+    keyVisible = !keyVisible;
+    $("pairing").value = pairingView();
+    $("revealBtn").textContent = keyVisible ? "🙈 Скрыть ключ" : "👁 Показать ключ";
+  });
+
   $("rotateBtn").addEventListener("click", async () => {
     if (!confirm("Сгенерировать новый ключ? Старый мгновенно перестанет работать.")) return;
-    const block = await invoke("rotate_key");
-    $("pairing").value = block;
+    await invoke("rotate_key");
     toast("Новый ключ создан, старый отозван");
     refreshState();
   });
