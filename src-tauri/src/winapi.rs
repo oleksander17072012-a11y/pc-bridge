@@ -149,6 +149,7 @@ extern "system" {
 
 #[link(name = "shell32")]
 extern "system" {
+    fn IsUserAnAdmin() -> i32;
     fn ShellExecuteW(
         hwnd: isize,
         operation: *const u16,
@@ -634,16 +635,5 @@ pub fn relaunch_elevated() -> Result<(), String> {
 }
 
 pub fn is_elevated() -> bool {
-    // Cheap heuristic without opening a token: try writing to a protected directory.
-    // Kept intentionally simple; the UI labels this as a hint, not a guarantee.
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open("C:\\Windows\\System32\\pc-bridge-elevation-probe.tmp")
-        .map(|_| {
-            let _ = std::fs::remove_file("C:\\Windows\\System32\\pc-bridge-elevation-probe.tmp");
-            true
-        })
-        .unwrap_or(false)
+    unsafe { IsUserAnAdmin() != 0 }
 }
