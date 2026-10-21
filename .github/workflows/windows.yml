@@ -51,8 +51,12 @@ jobs:
         run: |
           $exe = "src-tauri/target/release/pc-bridge.exe"
           $size = (Get-Item $exe).Length / 1MB
-          "pc-bridge.exe — {0:N1} MB" -f $size | Tee-Object -FilePath size.txt
-          Add-Content -Path $GITHUB_STEP_SUMMARY -Value "### pc-bridge.exe`n- size: {0:N1} MB`n- sha256: ``{1}``" -f $size, (Get-FileHash $exe -Algorithm SHA256).Hash
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          $line = "pc-bridge.exe — {0:N1} MB" -f $size
+          $line
+          "sha256 $hash"
+          $summary = "### pc-bridge.exe`n`nsize: {0:N1} MB`n`nsha256: ``{1}``" -f $size, $hash
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Upload executable
         uses: actions/upload-artifact@v7
