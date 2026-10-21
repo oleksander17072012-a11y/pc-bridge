@@ -40,12 +40,6 @@ pub fn pairing_bundle(state: Shared<'_>) -> String {
     format!("{}\n\n---\n\n{}", state.pairing_block(), prompt::PAIRING_PROMPT)
 }
 
-/// Re-clips the window after a resize (the system region does not follow the window).
-#[tauri::command]
-pub fn apply_shape(_state: Shared<'_>, window: tauri::WebviewWindow) {
-    crate::shape::apply(&window);
-}
-
 #[tauri::command]
 pub fn restart_tunnel(state: Shared<'_>) {
     state.tunnel.restart();

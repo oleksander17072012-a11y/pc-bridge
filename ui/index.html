@@ -19,7 +19,12 @@
     --radius: 16px;
   }
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; }
+  html { height: 100%; margin: 0; background: transparent; }
+  body {
+    height: 100%; margin: 0; overflow: hidden;
+    background: #0a0a0e;
+    border-radius: var(--radius);
+  }
   body {
     color: var(--text);
     font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -33,11 +38,9 @@
 
   .shell {
     position: fixed; inset: 0; display: flex; flex-direction: column;
-    background: linear-gradient(180deg, rgba(15,15,20,.97) 0%, rgba(8,8,11,.99) 100%);
-    border: 1px solid var(--line-hi);
+    background: linear-gradient(180deg, #101014 0%, #0a0a0e 100%);
     border-radius: var(--radius);
     overflow: hidden;
-    box-shadow: 0 24px 70px -28px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.06);
   }
 
   /* ---------- custom title bar ---------- */
@@ -45,7 +48,7 @@
     height: 44px; flex: 0 0 44px; display: flex; align-items: center;
     padding: 0 6px 0 14px; user-select: none;
     border-bottom: 1px solid var(--line);
-    background: linear-gradient(180deg, rgba(255,255,255,.035), transparent);
+    background: #101014;
   }
   .drag {
     flex: 1; align-self: stretch; display: flex; align-items: center; gap: 16px;
@@ -240,12 +243,6 @@
     dragging = true;
     appWindow.startDragging();
     setTimeout(() => { dragging = false; }, 400);
-  });
-
-  let shapeTimer = null;
-  window.addEventListener("resize", () => {
-    clearTimeout(shapeTimer);
-    shapeTimer = setTimeout(() => invoke("apply_shape"), 60);
   });
 
   $("tbMin").addEventListener("click", () => appWindow.minimize());

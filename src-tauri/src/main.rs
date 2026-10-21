@@ -44,9 +44,9 @@ fn main() {
                 .push(&handle, "relay", &format!("релей слушает 127.0.0.1:{port}"));
             relay::serve(Arc::clone(&state), listener);
 
-            // 2. Rounded outline at the OS level (see shape.rs). No blur effects:
-            //    DWM blur was both the cause of the drag lag and of the square corners,
-            //    because it paints the full window rectangle.
+            // 2. Rounded outline (see shape.rs). No blur effects and no resize frame:
+            //    DWM effects painted the full window rectangle (square corners, drag lag)
+            //    and the thick frame drew a light outline along the edges.
             if let Some(main) = app.get_webview_window("main") {
                 shape::apply(&main);
             }
@@ -123,7 +123,6 @@ fn main() {
             commands::set_active,
             commands::rotate_key,
             commands::restart_tunnel,
-            commands::apply_shape,
             commands::refresh_windows,
             commands::activate_window,
             commands::close_window,
