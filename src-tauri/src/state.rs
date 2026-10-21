@@ -23,6 +23,7 @@ pub struct AppState {
     key: Mutex<String>,
     port: Mutex<u16>,
     active: AtomicBool,
+    stage: Mutex<Option<String>>,
     cursor: Mutex<Option<(i32, i32)>>,
     windows: Mutex<Vec<WindowInfo>>,
     started: Instant,
@@ -45,6 +46,7 @@ impl AppState {
             key: Mutex::new(key),
             port: Mutex::new(0),
             active: AtomicBool::new(true),
+            stage: Mutex::new(None),
             cursor: Mutex::new(None),
             windows: Mutex::new(Vec::new()),
             started: Instant::now(),
@@ -105,6 +107,16 @@ impl AppState {
         let _ = self.app.emit("state", self.snapshot());
     }
 
+    /// Current stage of the work the assistant is performing (shown as a log header).
+    pub fn set_stage(&self, stage: Option<String>) {
+        *lock(&self.stage) = stage;
+        let _ = self.app.emit("state", self.snapshot());
+    }
+
+    pub fn stage(&self) -> Option<String> {
+        lock(&self.stage).clone()
+    }
+
     pub fn bump_commands(&self) {
         self.commands.fetch_add(1, Ordering::Relaxed);
     }
@@ -152,6 +164,7 @@ impl AppState {
             "tunnel_url": self.tunnel.url(),
             "pairing": self.pairing_block(),
             "active": self.is_active(),
+            "stage": self.stage(),
             "overlay": self.overlay_enabled(),
             "elevated_hint": winapi::is_elevated(),
             "uptime_seconds": self.uptime_seconds(),

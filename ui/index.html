@@ -113,18 +113,48 @@
   .stat .v.clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mono { font-family: "Cascadia Mono", "Consolas", monospace; font-size: 12px; }
 
-  .journal { display: flex; flex-direction: column; gap: 1px; height: 250px; max-height: 250px; min-height: 0; overflow-y: auto; overflow-x: hidden; contain: content; }
-  .entry { display: flex; align-items: baseline; gap: 10px; flex: 0 0 auto; padding: 4px 7px; border-radius: 8px; font-size: 12.5px; white-space: nowrap; overflow: hidden; }
+  .journal {
+    display: flex; flex-direction: column; gap: 1px; height: 268px; max-height: 268px; min-height: 0;
+    overflow-y: auto; overflow-x: hidden; contain: content;
+    font-family: "Cascadia Mono", "Consolas", monospace;
+  }
+  .entry {
+    display: flex; align-items: baseline; gap: 9px; flex: 0 0 auto;
+    padding: 3px 7px; border-radius: 7px; font-size: 12px; line-height: 1.55;
+    white-space: nowrap; overflow: hidden; color: #c9c9d6;
+  }
   .entry:hover { background: rgba(255,255,255,.04); }
-  .entry .t { flex: 0 0 122px; color: #5f5f70; font-family: "Cascadia Mono", monospace; font-size: 11px; }
-  .entry .k { flex: 0 0 52px; font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-  .entry.shell .k { color: #7dd3fc; }
-  .entry.gui .k { color: #c4b5fd; }
-  .entry.note .k { color: #fcd34d; }
-  .entry.tunnel .k { color: #6ee7b7; }
-  .entry.ui .k { color: #93c5fd; }
-  .entry.key .k, .entry.admin .k { color: #fca5a5; }
-  .entry .m { flex: 1 1 auto; min-width: 0; color: #d5d5e0; overflow: hidden; text-overflow: ellipsis; }
+  .entry .t { flex: 0 0 66px; color: #4d4d5c; font-size: 11px; }
+  .entry .g { flex: 0 0 13px; text-align: center; font-size: 11px; color: var(--muted); }
+  .entry .m { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+  /* stage header: the "этап" of the work */
+  .entry.stage {
+    margin: 7px 0 2px; padding: 6px 8px; border-radius: 8px;
+    background: rgba(108,140,255,.09); border-left: 2px solid var(--accent);
+    color: #dfe5ff; font-weight: 600; white-space: normal;
+  }
+  .entry.stage:first-child { margin-top: 0; }
+  .entry.stage .t { flex: 0 0 66px; color: #6a7ab5; }
+  .entry.stage .g { color: var(--accent); }
+  /* steps, results, errors */
+  .entry.step { padding-left: 24px; }
+  .entry.step .g { color: #9db4ff; }
+  .entry.step .m { color: #cfd3e6; }
+  .entry.result .g { color: var(--green); }
+  .entry.result .m { color: #c8f5e0; }
+  .entry.error { background: rgba(248,113,113,.07); }
+  .entry.error .g { color: var(--red); }
+  .entry.error .m { color: #ffc9c9; }
+  .entry.note .g { color: var(--amber); }
+  .entry.shell .g, .entry.tunnel .g { color: #7dd3fc; }
+  .entry.gui .g { color: #c4b5fd; }
+  .entry.ui .g { color: #93c5fd; }
+  .entry.key .g, .entry.admin .g { color: #fca5a5; }
+
+  .stage-chip { max-width: 320px; color: #9db4ff; }
+  .stage-chip .stage-mark { color: var(--accent); }
+  .stage-chip span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .shot-wrap { margin-top: 11px; display: none; }
   .shot-wrap.show { display: block; }
@@ -148,6 +178,7 @@
       <div class="tb-status">
         <span class="chip"><span class="dot wait" id="agentDot"></span><span id="agentLabel">запуск…</span></span>
         <span class="chip"><span class="dot wait" id="tunnelDot"></span><span id="tunnelLabel">туннель…</span></span>
+        <span class="chip stage-chip" id="stageChip" hidden><span class="stage-mark">▸</span><span id="stageLabel"></span></span>
       </div>
     </div>
     <button class="tb-btn min" id="tbMin" title="Свернуть">─</button>
@@ -319,14 +350,41 @@
     $("agentLabel").textContent = next.active ? "агент активен" : "пауза";
     $("pauseBtn").textContent = next.active ? "Пауза" : "Продолжить";
 
+    const chip = $("stageChip");
+    if (next.stage) {
+      chip.hidden = false;
+      $("stageLabel").textContent = next.stage;
+      chip.title = next.stage;
+    } else {
+      chip.hidden = true;
+    }
+
     $("tunnelDot").className = "dot " + (next.tunnel_url ? "on" : "wait");
     $("tunnelLabel").textContent = next.tunnel_url ? "туннель готов" : "поднимаю туннель";
   }
 
+  const GLYPH = {
+    stage: "▸",
+    step: "→",
+    result: "✓",
+    error: "✕",
+    note: "·",
+    shell: "$",
+    gui: "⌘",
+    tunnel: "≈",
+    ui: "◌",
+    key: "⚿",
+    admin: "!",
+    agent: "•",
+    relay: "≈",
+  };
+
   function entryHtml(entry) {
+    const clock = String(entry.time || "").slice(11); // HH:MM:SS
+    const glyph = GLYPH[entry.kind] || "·";
     return `<div class="entry ${escapeHtml(entry.kind)}">
-      <span class="t">${escapeHtml(entry.time)}</span>
-      <span class="k">${escapeHtml(entry.kind)}</span>
+      <span class="t">${escapeHtml(clock)}</span>
+      <span class="g">${escapeHtml(glyph)}</span>
       <span class="m">${escapeHtml(entry.text)}</span>
     </div>`;
   }

@@ -128,9 +128,28 @@ async fn note(State(state): State<Arc<AppState>>, headers: HeaderMap, body: Byte
     if text.chars().count() > 2000 {
         return json_response(StatusCode::PAYLOAD_TOO_LARGE, json!({ "error": "note too long (max 2000 characters)" }));
     }
+
+    // Notes double as a structured work log: "stage" starts a phase, "step" narrates one
+    // action, "result"/"error" closes it. Anything else is a plain note.
+    let kind = match payload.get("kind").and_then(|value| value.as_str()).unwrap_or("note") {
+        "stage" => "stage",
+        "step" => "step",
+        "result" => "result",
+        "error" => "error",
+        _ => "note",
+    };
+
     let sequence = state.bump_notes();
-    state.journal.push(&state.app, "note", &format!("[{sequence:03}] {text}"));
-    json_response(StatusCode::OK, json!({ "ok": true, "sequence": sequence }))
+    if kind == "stage" {
+        state.set_stage(Some(text.clone()));
+    }
+    let line = if kind == "stage" {
+        text.clone()
+    } else {
+        format!("{sequence:02} · {text}")
+    };
+    state.journal.push(&state.app, kind, &line);
+    json_response(StatusCode::OK, json!({ "ok": true, "sequence": sequence, "kind": kind }))
 }
 
 async fn result(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
