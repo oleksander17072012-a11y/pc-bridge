@@ -1,6 +1,6 @@
 [package]
 name = "pc-bridge"
-version = "1.0.0"
+version = "1.1.0"
 description = "PC-Bridge — remote control bridge for your own Windows PC"
 authors = ["oleksander17072012-a11y"]
 edition = "2021"
@@ -17,6 +17,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net",
 axum = "0.8"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+window-vibrancy = "0.8"
 
 [profile.release]
 opt-level = "s"

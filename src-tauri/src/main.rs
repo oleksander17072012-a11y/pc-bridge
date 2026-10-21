@@ -8,6 +8,7 @@ mod commands;
 mod input;
 mod journal;
 mod paths;
+mod prompt;
 mod relay;
 mod shell;
 mod state;
@@ -42,15 +43,23 @@ fn main() {
                 .push(&handle, "relay", &format!("релей слушает 127.0.0.1:{port}"));
             relay::serve(Arc::clone(&state), listener);
 
-            // 2. The overlay cursor must never steal hit-testing from real windows.
+            // 2. Acrylic blur of the desktop behind the frameless window.
+            if let Some(main) = app.get_webview_window("main") {
+                match window_vibrancy::apply_acrylic(&main, Some((9, 9, 12, 150))) {
+                    Ok(()) => state.journal.push(&handle, "ui", "акриловый блюр включён"),
+                    Err(error) => state.journal.push(&handle, "ui", &format!("блюр недоступен: {error}")),
+                }
+            }
+
+            // 3. The overlay cursor must never steal hit-testing from real windows.
             if let Some(overlay) = app.get_webview_window("overlay") {
                 let _ = overlay.set_ignore_cursor_events(true);
             }
 
-            // 3. Public tunnel.
+            // 4. Public tunnel.
             state.tunnel.start();
 
-            // 4. Keep the window cache and the pairing file fresh.
+            // 5. Keep the window cache and the pairing file fresh.
             {
                 let worker = Arc::clone(&state);
                 std::thread::spawn(move || {
@@ -68,7 +77,7 @@ fn main() {
                 });
             }
 
-            // 5. Closing the window hides it to the tray; the agent keeps running.
+            // 6. Closing the window hides it to the tray; the agent keeps running.
             if let Some(window) = app.get_webview_window("main") {
                 let hide_handle = handle.clone();
                 window.on_window_event(move |event| {
@@ -81,7 +90,7 @@ fn main() {
                 });
             }
 
-            // 6. Tray menu.
+            // 7. Tray menu.
             let show_item = MenuItem::with_id(app, "show", "Показать окно", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
@@ -119,6 +128,8 @@ fn main() {
             commands::activate_window,
             commands::close_window,
             commands::screenshot,
+            commands::pairing_bundle,
+            commands::set_blur,
             commands::elevate,
             commands::open_data_dir,
             commands::quit,

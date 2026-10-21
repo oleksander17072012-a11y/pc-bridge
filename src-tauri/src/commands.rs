@@ -6,6 +6,7 @@ use tauri::State;
 use crate::b64;
 use crate::journal::Entry;
 use crate::paths;
+use crate::prompt;
 use crate::state::AppState;
 use crate::winapi::{self, WindowInfo};
 
@@ -35,6 +36,36 @@ pub fn toggle_overlay(state: Shared<'_>, enabled: bool) {
 pub fn rotate_key(state: Shared<'_>) -> String {
     state.rotate_key();
     state.pairing_block()
+}
+
+/// Pairing block followed by the assistant prompt, so one click fills the clipboard
+/// with everything that has to be pasted into a chat.
+#[tauri::command]
+pub fn pairing_bundle(state: Shared<'_>) -> String {
+    format!("{}\n\n---\n\n{}", state.pairing_block(), prompt::PAIRING_PROMPT)
+}
+
+#[tauri::command]
+pub fn set_blur(state: Shared<'_>, window: tauri::WebviewWindow, enabled: bool) -> bool {
+    let result = if enabled {
+        window_vibrancy::apply_acrylic(&window, Some((9, 9, 12, 150)))
+    } else {
+        window_vibrancy::clear_acrylic(&window)
+    };
+    match result {
+        Ok(()) => {
+            state.journal.push(
+                &state.app,
+                "ui",
+                if enabled { "блюр фона включён" } else { "блюр фона выключен" },
+            );
+            true
+        }
+        Err(error) => {
+            state.journal.push(&state.app, "ui", &format!("не удалось изменить блюр: {error}"));
+            false
+        }
+    }
 }
 
 #[tauri::command]

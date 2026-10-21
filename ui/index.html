@@ -6,158 +6,179 @@
 <title>PC-Bridge</title>
 <style>
   :root {
-    --bg: #000000;
-    --panel: #0a0a0c;
-    --card: #101014;
-    --card-hi: #16161c;
-    --line: #1f1f26;
+    --bg: rgba(9, 9, 12, 0.72);
+    --card: rgba(20, 20, 26, 0.55);
+    --card-2: rgba(13, 13, 17, 0.6);
+    --line: rgba(255, 255, 255, 0.07);
+    --line-hi: rgba(255, 255, 255, 0.12);
     --text: #ececf1;
     --muted: #8b8b98;
     --accent: #6c8cff;
     --green: #34d399;
     --red: #f87171;
     --amber: #fbbf24;
-    --radius: 14px;
+    --radius: 16px;
   }
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
+  html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; }
   body {
-    background: radial-gradient(1200px 600px at 15% -10%, #11131c 0%, var(--bg) 55%) fixed;
     color: var(--text);
-    font: 14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+    font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    overflow: hidden;
+    border-radius: var(--radius);
   }
+  body.maximized { border-radius: 0; }
   button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: #23232c; border-radius: 8px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
   ::-webkit-scrollbar-track { background: transparent; }
 
-  .app { display: flex; flex-direction: column; height: 100vh; padding: 18px 20px 16px; gap: 14px; }
+  /* ---------- frameless shell ---------- */
+  .shell {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    background: linear-gradient(180deg, rgba(16,16,22,.82) 0%, rgba(8,8,11,.86) 100%);
+    border: 1px solid var(--line-hi);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 24px 70px -28px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  body.maximized .shell { border-radius: 0; border-color: transparent; }
 
-  header { display: flex; align-items: center; gap: 12px; }
+  /* ---------- custom title bar ---------- */
+  .titlebar {
+    height: 46px; flex: 0 0 46px; display: flex; align-items: center; gap: 10px;
+    padding: 0 6px 0 14px; user-select: none;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,.035), transparent);
+  }
+  .drag { flex: 1; align-self: stretch; display: flex; align-items: center; gap: 10px; min-width: 0; }
   .logo {
-    width: 34px; height: 34px; border-radius: 11px; flex: 0 0 auto;
-    background: linear-gradient(145deg, #6c8cff, #3d5bdb);
-    box-shadow: 0 0 0 1px #7f9bff44, 0 8px 26px -10px #6c8cffaa;
-    display: grid; place-items: center; font-weight: 700; font-size: 15px;
+    width: 24px; height: 24px; border-radius: 8px; flex: 0 0 auto;
+    background: linear-gradient(145deg, #7b98ff, #3d5bdb);
+    box-shadow: 0 0 0 1px rgba(127,155,255,.35), 0 6px 18px -8px #6c8cffcc;
+    display: grid; place-items: center; font-size: 10.5px; font-weight: 700; letter-spacing: .3px;
   }
-  .titles { display: flex; flex-direction: column; }
-  .titles b { font-size: 16px; letter-spacing: .2px; }
-  .titles span { color: var(--muted); font-size: 11.5px; letter-spacing: .4px; text-transform: uppercase; }
-  .spacer { flex: 1; }
-  .pill {
-    display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px;
-    border-radius: 999px; background: var(--card); border: 1px solid var(--line);
-    font-size: 12px; color: var(--muted); white-space: nowrap;
-  }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .dot.on { background: var(--green); box-shadow: 0 0 10px var(--green); }
-  .dot.off { background: var(--red); box-shadow: 0 0 10px var(--red); }
-  .dot.wait { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .tb-title { font-size: 12.5px; font-weight: 600; letter-spacing: .3px; white-space: nowrap; }
+  .tb-sub { color: #5d5d6b; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
+  .tb-status { display: flex; align-items: center; gap: 12px; margin-left: 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .2s, box-shadow .2s; }
+  .dot.on { background: var(--green); box-shadow: 0 0 9px var(--green); }
+  .dot.off { background: var(--red); box-shadow: 0 0 9px var(--red); }
+  .dot.wait { background: var(--amber); box-shadow: 0 0 9px var(--amber); }
 
-  .scroll { overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
+  .tb-btn {
+    width: 34px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+    color: #a8a8b8; font-size: 13px; transition: background .13s, color .13s;
+  }
+  .tb-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
+  .tb-btn.active { color: #9db4ff; }
+  .tb-btn.close:hover { background: #c0392b; color: #fff; }
+  .tb-sep { width: 1px; height: 18px; background: var(--line-hi); margin: 0 4px; }
+
+  /* ---------- content ---------- */
+  .content { flex: 1; overflow: auto; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
 
   .card {
-    background: linear-gradient(180deg, var(--card) 0%, #0c0c10 100%);
-    border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
+    background: linear-gradient(180deg, var(--card) 0%, var(--card-2) 100%);
+    border: 1px solid var(--line); border-radius: 14px; padding: 15px 16px;
+    backdrop-filter: blur(2px);
   }
   .card h2 {
-    margin: 0 0 12px; font-size: 12px; letter-spacing: .9px; text-transform: uppercase;
+    margin: 0 0 11px; font-size: 11px; letter-spacing: .9px; text-transform: uppercase;
     color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 8px;
   }
-  .card h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: #5d5d6b; }
+  .card h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: #5d5d6b; font-size: 11px; }
 
   textarea {
-    width: 100%; min-height: 96px; resize: vertical; padding: 12px 14px;
-    border-radius: 11px; border: 1px solid var(--line); background: #07070a;
+    width: 100%; min-height: 92px; resize: vertical; padding: 11px 13px;
+    border-radius: 11px; border: 1px solid var(--line); background: rgba(5,5,8,.65);
     color: var(--text); font: 12.5px/1.6 "Cascadia Mono", "Consolas", monospace;
     outline: none; word-break: break-all;
   }
-  textarea:focus { border-color: #34405f; }
+  textarea:focus { border-color: rgba(108,140,255,.45); }
 
-  .row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
-  .row.tight { gap: 8px; }
-
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .btn {
-    padding: 9px 14px; border-radius: 10px; background: var(--card-hi);
-    border: 1px solid var(--line); color: var(--text); font-size: 13px;
+    padding: 8px 13px; border-radius: 10px; background: rgba(255,255,255,.06);
+    border: 1px solid var(--line); color: var(--text); font-size: 12.5px;
     transition: background .15s, border-color .15s, transform .08s;
   }
-  .btn:hover { background: #1d1d25; border-color: #2c2c38; }
+  .btn:hover { background: rgba(255,255,255,.11); border-color: var(--line-hi); }
   .btn:active { transform: translateY(1px); }
-  .btn.primary { background: linear-gradient(180deg, #6c8cff, #5573e6); border-color: #7f9bff; color: #fff; font-weight: 600; }
+  .btn.primary { background: linear-gradient(180deg, #6c8cff, #5573e6); border-color: rgba(160,180,255,.55); color: #fff; font-weight: 600; }
   .btn.primary:hover { filter: brightness(1.07); }
-  .btn.danger { border-color: #4a2226; color: #ffb4b4; background: #1a1013; }
-  .btn.danger:hover { background: #241318; }
   .btn.ghost { background: transparent; }
-  .btn.small { padding: 5px 9px; font-size: 11.5px; border-radius: 8px; }
+  .btn.danger { border-color: rgba(248,113,113,.28); color: #ffb4b4; background: rgba(248,113,113,.07); }
+  .btn.danger:hover { background: rgba(248,113,113,.14); }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
 
-  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 9px; }
   @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  .stat { background: #0b0b0f; border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; min-width: 0; }
-  .stat .k { color: var(--muted); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
-  .stat .v { margin-top: 4px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .stat { background: rgba(6,6,9,.55); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; min-width: 0; }
+  .stat .k { color: var(--muted); font-size: 10.5px; letter-spacing: .55px; text-transform: uppercase; }
+  .stat .v { margin-top: 3px; font-size: 13px; font-variant-numeric: tabular-nums; }
   .stat .v.clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mono { font-family: "Cascadia Mono", "Consolas", monospace; font-size: 12px; }
 
-  .journal { display: flex; flex-direction: column; gap: 1px; max-height: 260px; overflow: auto; }
-  .entry { display: grid; grid-template-columns: 138px 62px 1fr; gap: 10px; padding: 5px 8px; border-radius: 8px; font-size: 12.5px; }
-  .entry:hover { background: #12121a; }
-  .entry .t { color: #5f5f70; font-family: "Cascadia Mono", monospace; font-size: 11.5px; }
-  .entry .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); align-self: center; }
+  .journal { display: flex; flex-direction: column; gap: 1px; max-height: 250px; overflow: auto; margin: -3px -4px; padding: 0 4px; }
+  .entry { display: grid; grid-template-columns: 132px 58px 1fr; gap: 10px; padding: 5px 7px; border-radius: 8px; font-size: 12.5px; }
+  .entry:hover { background: rgba(255,255,255,.04); }
+  .entry .t { color: #5f5f70; font-family: "Cascadia Mono", monospace; font-size: 11px; }
+  .entry .k { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); align-self: center; }
   .entry.shell .k { color: #7dd3fc; }
   .entry.gui .k { color: #c4b5fd; }
   .entry.note .k { color: #fcd34d; }
   .entry.tunnel .k { color: #6ee7b7; }
+  .entry.ui .k { color: #93c5fd; }
   .entry.key .k, .entry.admin .k { color: #fca5a5; }
   .entry .m { color: #d5d5e0; word-break: break-word; }
 
-  .winlist { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow: auto; }
-  .win {
-    display: flex; align-items: center; gap: 10px; padding: 8px 11px;
-    background: #0b0b0f; border: 1px solid var(--line); border-radius: 10px;
-  }
-  .win .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-  .win .proc { color: var(--muted); font-size: 11.5px; font-family: "Cascadia Mono", monospace; white-space: nowrap; }
-
-  .shot-wrap { margin-top: 12px; display: none; }
+  .shot-wrap { margin-top: 11px; display: none; }
   .shot-wrap.show { display: block; }
   .shot-wrap img { width: 100%; border-radius: 10px; border: 1px solid var(--line); }
 
   .toast {
-    position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px);
-    background: #16161f; border: 1px solid #2a2a36; color: var(--text);
-    padding: 10px 16px; border-radius: 11px; font-size: 13px; opacity: 0;
-    transition: opacity .18s, transform .18s; pointer-events: none; max-width: 78vw;
+    position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 16px);
+    background: rgba(24,24,32,.96); border: 1px solid var(--line-hi); color: var(--text);
+    padding: 9px 15px; border-radius: 11px; font-size: 12.5px; opacity: 0;
+    transition: opacity .18s, transform .18s; pointer-events: none; max-width: 80vw;
+    box-shadow: 0 12px 40px -14px #000;
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
-  footer { display: flex; align-items: center; gap: 10px; color: #55555f; font-size: 11px; }
-  .kv { display: flex; gap: 6px; }
+  footer { display: flex; align-items: center; gap: 10px; color: #4f4f5c; font-size: 10.5px; }
+  .spacer { flex: 1; }
 </style>
 </head>
 <body>
-<div class="app">
-  <header>
-    <div class="logo">PB</div>
-    <div class="titles">
-      <b>PC-Bridge</b>
-      <span>Rust · Tauri 2 · Windows</span>
+<div class="shell">
+  <!-- custom title bar -->
+  <div class="titlebar">
+    <div class="drag" data-tauri-drag-region>
+      <div class="logo">PB</div>
+      <span class="tb-title" data-tauri-drag-region>PC-Bridge</span>
+      <span class="tb-sub" data-tauri-drag-region>rust · tauri 2</span>
+      <div class="tb-status">
+        <span class="chip"><span class="dot wait" id="agentDot"></span><span id="agentLabel">запуск…</span></span>
+        <span class="chip"><span class="dot wait" id="tunnelDot"></span><span id="tunnelLabel">туннель…</span></span>
+      </div>
     </div>
-    <div class="spacer"></div>
-    <div class="pill"><span class="dot wait" id="agentDot"></span><span id="agentLabel">запуск…</span></div>
-    <div class="pill"><span class="dot wait" id="tunnelDot"></span><span id="tunnelLabel">туннель…</span></div>
-  </header>
+    <button class="tb-btn active" id="tbBlur" title="Блюр фона">◍</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="tbMin" title="Свернуть">─</button>
+    <button class="tb-btn" id="tbMax" title="Развернуть">□</button>
+    <button class="tb-btn close" id="tbClose" title="Свернуть в трей">✕</button>
+  </div>
 
-  <div class="scroll">
+  <div class="content">
     <section class="card">
-      <h2>Ключ подключения <span class="hint">вставьте этот блок в чат — он даёт доступ к ПК</span></h2>
+      <h2>Ключ подключения <span class="hint">одна кнопка — ключ и промпт одним текстом</span></h2>
       <textarea id="pairing" readonly spellcheck="false"></textarea>
       <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="copyBtn">📋 Копировать ключ</button>
+        <button class="btn primary" id="copyBtn">📋 Копировать ключ + промпт</button>
+        <button class="btn" id="copyKeyBtn">Ключ</button>
         <button class="btn ghost" id="revealBtn">👁 Показать ключ</button>
-        <button class="btn" id="rotateBtn">🎲 Новый ключ</button>
+        <button class="btn ghost" id="rotateBtn">🎲 Новый ключ</button>
         <button class="btn ghost" id="tunnelBtn">⟳ Обновить туннель</button>
       </div>
     </section>
@@ -172,11 +193,11 @@
         <div class="stat"><div class="k">Задач / заметок</div><div class="v" id="sCounters">—</div></div>
         <div class="stat"><div class="k">Права</div><div class="v" id="sAdmin">—</div></div>
       </div>
-      <div class="row" style="margin-top:12px">
+      <div class="row" style="margin-top:11px">
         <button class="btn" id="pauseBtn">⏸ Пауза</button>
-        <button class="btn" id="overlayBtn">◌ Виртуальный курсор: вкл</button>
+        <button class="btn" id="overlayBtn">◌ Курсор: вкл</button>
         <button class="btn" id="shotBtn">🖼 Скриншот</button>
-        <button class="btn" id="adminBtn">🛡 Права администратора</button>
+        <button class="btn" id="adminBtn">🛡 Администратор</button>
         <button class="btn ghost" id="folderBtn">📁 Папка данных</button>
         <div class="spacer"></div>
         <button class="btn danger" id="quitBtn">Закрыть совсем</button>
@@ -189,18 +210,10 @@
       <div class="journal" id="journal"></div>
     </section>
 
-    <section class="card">
-      <h2>Окна <span class="hint">только чтение списка; действия — по кнопке</span>
-        <span class="spacer"></span>
-        <button class="btn small ghost" id="refreshWins">обновить</button>
-      </h2>
-      <div class="winlist" id="winlist"></div>
-    </section>
-
     <footer>
-      <div class="kv"><span>v<span id="version">—</span></span></div>
+      <span>v<span id="version">—</span></span>
       <div class="spacer"></div>
-      <div>системный курсор не перемещается · фон · Win32 PostMessage</div>
+      <span>системный курсор не перемещается · фон · Win32 PostMessage</span>
     </footer>
   </div>
 </div>
@@ -209,11 +222,13 @@
 <script>
   const { invoke } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
+  const appWindow = window.__TAURI__.window.getCurrentWindow();
 
   const $ = (id) => document.getElementById(id);
   let state = null;
   let journalEntries = [];
   let keyVisible = false;
+  let blurEnabled = true;
   let toastTimer = null;
 
   function toast(message) {
@@ -221,7 +236,7 @@
     node.textContent = message;
     node.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => node.classList.remove("show"), 3200);
+    toastTimer = setTimeout(() => node.classList.remove("show"), 3000);
   }
 
   function escapeHtml(value) {
@@ -239,18 +254,91 @@
     return `${s} с`;
   }
 
+  // ---------------------------------------------------------------- window controls
+  async function syncMaximized() {
+    try {
+      const maximized = await appWindow.isMaximized();
+      document.body.classList.toggle("maximized", !!maximized);
+      $("tbMax").textContent = maximized ? "❐" : "□";
+    } catch (error) { /* ignore */ }
+  }
+
+  $("tbMin").addEventListener("click", () => appWindow.minimize());
+  $("tbMax").addEventListener("click", () => appWindow.toggleMaximize().then(syncMaximized));
+  $("tbClose").addEventListener("click", () => appWindow.close());
+  appWindow.listen("tauri://resize", syncMaximized);
+  window.addEventListener("resize", syncMaximized);
+
+  $("tbBlur").addEventListener("click", async () => {
+    blurEnabled = !blurEnabled;
+    const ok = await invoke("set_blur", { enabled: blurEnabled });
+    blurEnabled = ok ? blurEnabled : !blurEnabled;
+    $("tbBlur").classList.toggle("active", blurEnabled);
+    $("tbBlur").title = blurEnabled ? "Блюр фона: вкл" : "Блюр фона: выкл";
+    toast(blurEnabled ? "Блюр фона включён" : "Блюр фона выключен");
+  });
+
+  // ---------------------------------------------------------------- pairing
   function pairingView() {
     const block = state?.pairing || "";
     if (!block || keyVisible) return block;
-    // Mask the secret on screen: the full block is still what "Копировать" puts on the clipboard.
     return block.replace(/key=([0-9a-f]{4})[0-9a-f]+([0-9a-f]{4})/i, "key=$1••••••••••••$2");
   }
 
+  async function copyText(text, message) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.select();
+      document.execCommand("copy");
+      helper.remove();
+    }
+    toast(message);
+  }
+
+  $("copyBtn").addEventListener("click", async () => {
+    try {
+      const bundle = await invoke("pairing_bundle");
+      await copyText(bundle, "Скопировано: ключ + промпт одним текстом");
+    } catch (error) {
+      await copyText(state?.pairing || "", "Скопирован только ключ");
+    }
+  });
+
+  $("copyKeyBtn").addEventListener("click", () =>
+    copyText(state?.pairing || "", "Скопирован только блок ключа"));
+
+  $("revealBtn").addEventListener("click", () => {
+    keyVisible = !keyVisible;
+    $("pairing").value = pairingView();
+    $("revealBtn").textContent = keyVisible ? "🙈 Скрыть ключ" : "👁 Показать ключ";
+  });
+
+  $("rotateBtn").addEventListener("click", async () => {
+    if (!confirm("Сгенерировать новый ключ? Старый мгновенно перестанет работать.")) return;
+    await invoke("rotate_key");
+    toast("Новый ключ создан, старый отозван");
+    refreshState();
+  });
+
+  $("tunnelBtn").addEventListener("click", async () => {
+    await invoke("restart_tunnel");
+    toast("Туннель перезапускается…");
+    refreshState();
+  });
+
+  // ---------------------------------------------------------------- state
   function renderState(next) {
     if (!next) return;
     state = next;
     $("pairing").value = pairingView();
     $("revealBtn").textContent = keyVisible ? "🙈 Скрыть ключ" : "👁 Показать ключ";
+
     const tunnelHost = (next.tunnel_url || "").replace(/^https?:\/\//, "");
     $("sTunnel").textContent = tunnelHost || "нет связи";
     $("sTunnel").title = next.tunnel_url || "туннель ещё не поднялся";
@@ -263,16 +351,14 @@
     $("sAdmin").style.color = next.elevated_hint ? "var(--amber)" : "var(--muted)";
     $("version").textContent = next.version || "—";
 
-    const agentDot = $("agentDot");
-    agentDot.className = "dot " + (next.active ? "on" : "off");
+    $("agentDot").className = "dot " + (next.active ? "on" : "off");
     $("agentLabel").textContent = next.active ? "агент активен" : "пауза";
     $("pauseBtn").textContent = next.active ? "⏸ Пауза" : "▶ Продолжить";
 
-    const tunnelDot = $("tunnelDot");
-    tunnelDot.className = "dot " + (next.tunnel_url ? "on" : "wait");
+    $("tunnelDot").className = "dot " + (next.tunnel_url ? "on" : "wait");
     $("tunnelLabel").textContent = next.tunnel_url ? "туннель готов" : "поднимаю туннель";
 
-    $("overlayBtn").textContent = next.overlay ? "◌ Виртуальный курсор: вкл" : "◌ Виртуальный курсор: выкл";
+    $("overlayBtn").textContent = next.overlay ? "◌ Курсор: вкл" : "◌ Курсор: выкл";
   }
 
   function entryHtml(entry) {
@@ -299,9 +385,7 @@
   async function refreshState() {
     try {
       renderState(await invoke("snapshot"));
-    } catch (error) {
-      toast("Не удалось получить состояние: " + error);
-    }
+    } catch (error) { /* окно ещё поднимается */ }
   }
 
   async function loadJournal() {
@@ -310,76 +394,6 @@
       renderJournal();
     } catch (error) { /* журнал появится позже */ }
   }
-
-  async function refreshWindows() {
-    try {
-      const windows = await invoke("refresh_windows");
-      const box = $("winlist");
-      if (!windows.length) {
-        box.innerHTML = `<div class="win"><span class="title" style="color:var(--muted)">нет видимых окон</span></div>`;
-        return;
-      }
-      box.innerHTML = windows.map((w) => `
-        <div class="win" data-hwnd="${w.hwnd}">
-          <span class="proc">${escapeHtml(w.process || "—")}</span>
-          <span class="title">${escapeHtml(w.title)}</span>
-          <button class="btn small" data-act="activate" data-hwnd="${w.hwnd}">активировать</button>
-          <button class="btn small danger" data-act="close" data-hwnd="${w.hwnd}">закрыть</button>
-        </div>`).join("");
-    } catch (error) {
-      toast("Список окон недоступен: " + error);
-    }
-  }
-
-  $("winlist").addEventListener("click", async (event) => {
-    const button = event.target.closest("button[data-act]");
-    if (!button) return;
-    const hwnd = Number(button.dataset.hwnd);
-    if (button.dataset.act === "activate") {
-      await invoke("activate_window", { hwnd });
-    } else {
-      await invoke("close_window", { hwnd });
-      setTimeout(refreshWindows, 700);
-    }
-  });
-
-  $("copyBtn").addEventListener("click", async () => {
-    const block = state?.pairing || $("pairing").value;
-    try {
-      await navigator.clipboard.writeText(block);
-      toast("Ключ скопирован в буфер обмена");
-    } catch (error) {
-      // Fallback must copy the real block, not the masked one shown in the textarea.
-      const helper = document.createElement("textarea");
-      helper.value = state?.pairing || "";
-      helper.style.position = "fixed";
-      helper.style.opacity = "0";
-      document.body.appendChild(helper);
-      helper.select();
-      document.execCommand("copy");
-      helper.remove();
-      toast("Ключ скопирован (fallback)");
-    }
-  });
-
-  $("revealBtn").addEventListener("click", () => {
-    keyVisible = !keyVisible;
-    $("pairing").value = pairingView();
-    $("revealBtn").textContent = keyVisible ? "🙈 Скрыть ключ" : "👁 Показать ключ";
-  });
-
-  $("rotateBtn").addEventListener("click", async () => {
-    if (!confirm("Сгенерировать новый ключ? Старый мгновенно перестанет работать.")) return;
-    await invoke("rotate_key");
-    toast("Новый ключ создан, старый отозван");
-    refreshState();
-  });
-
-  $("tunnelBtn").addEventListener("click", async () => {
-    await invoke("restart_tunnel");
-    toast("Туннель перезапускается…");
-    refreshState();
-  });
 
   $("pauseBtn").addEventListener("click", async () => {
     await invoke("set_active", { active: !(state?.active ?? true) });
@@ -413,7 +427,6 @@
   });
 
   $("folderBtn").addEventListener("click", () => invoke("open_data_dir"));
-  $("refreshWins").addEventListener("click", refreshWindows);
   $("quitBtn").addEventListener("click", () => {
     if (confirm("Закрыть PC-Bridge полностью? Мост перестанет работать.")) invoke("quit");
   });
@@ -424,9 +437,8 @@
 
   refreshState();
   loadJournal();
-  refreshWindows();
+  syncMaximized();
   setInterval(refreshState, 2500);
-  setInterval(refreshWindows, 6000);
 </script>
 </body>
 </html>
