@@ -40,42 +40,10 @@ pub fn pairing_bundle(state: Shared<'_>) -> String {
     format!("{}\n\n---\n\n{}", state.pairing_block(), prompt::PAIRING_PROMPT)
 }
 
+/// Re-clips the window after a resize (the system region does not follow the window).
 #[tauri::command]
-pub fn set_blur(state: Shared<'_>, window: tauri::WebviewWindow, enabled: bool) -> bool {
-    // Same choice as at startup: Mica on Windows 11, cheap blur-behind on Windows 10.
-    let result = if winapi::windows_build() >= 22000 {
-        if enabled {
-            window_vibrancy::apply_mica(&window, Some(true))
-        } else {
-            window_vibrancy::clear_mica(&window)
-        }
-    } else if enabled {
-        window_vibrancy::apply_blur(&window, Some((9, 9, 12, 150)))
-    } else {
-        window_vibrancy::clear_blur(&window)
-    };
-    match result {
-        Ok(()) => {
-            state.set_blur_enabled(enabled);
-            crate::shape::apply(&window, enabled);
-            state.journal.push(
-                &state.app,
-                "ui",
-                if enabled { "блюр фона включён" } else { "блюр фона выключен" },
-            );
-            true
-        }
-        Err(error) => {
-            state.journal.push(&state.app, "ui", &format!("не удалось изменить блюр: {error}"));
-            false
-        }
-    }
-}
-
-/// Re-clips the window after a resize (the region is not scaled by the system).
-#[tauri::command]
-pub fn apply_shape(state: Shared<'_>, window: tauri::WebviewWindow) {
-    crate::shape::apply(&window, state.blur_enabled());
+pub fn apply_shape(_state: Shared<'_>, window: tauri::WebviewWindow) {
+    crate::shape::apply(&window);
 }
 
 #[tauri::command]

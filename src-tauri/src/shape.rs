@@ -2,16 +2,19 @@ use tauri::WebviewWindow;
 
 use crate::winapi;
 
-const CORNER_RADIUS: f64 = 16.0;
+/// CSS shell radius (16 px) plus one pixel, so the system clip never eats the
+/// anti-aliased CSS edge but still removes any stray native border pixels.
+const CORNER_RADIUS: f64 = 17.0;
 
-/// Keeps the visible window outline in sync with the CSS shell.
+/// Enforces the rounded window outline at the OS level.
 ///
-/// * Windows 11 — native DWM rounding, anti-aliased, nothing to clip.
-/// * Windows 10 with blur — a rounded window region, otherwise the blur paints over
-///   the corners and they look square.
-/// * Windows 10 without blur — no region at all, so the transparent webview shows
-///   perfect anti-aliased CSS corners.
-pub fn apply(window: &WebviewWindow, blur: bool) {
+/// * Windows 11 — DWM rounds the window natively and anti-aliased.
+/// * Windows 10 — a rounded window region clips the rectangle, otherwise the window
+///   background behind the CSS corners shows up as square dark blocks.
+///
+/// With no blur effect involved there is nothing opaque covering the corners, so the
+/// CSS `border-radius` supplies the smooth edge and the region only trims the rest.
+pub fn apply(window: &WebviewWindow) {
     let Ok(handle) = window.hwnd() else { return };
     let hwnd = handle.0 as isize;
     if hwnd == 0 {
@@ -24,8 +27,7 @@ pub fn apply(window: &WebviewWindow, blur: bool) {
         return;
     }
 
-    let maximized = window.is_maximized().unwrap_or(false);
-    if maximized || !blur {
+    if window.is_maximized().unwrap_or(false) {
         winapi::clear_region(hwnd);
         return;
     }

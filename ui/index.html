@@ -33,7 +33,7 @@
 
   .shell {
     position: fixed; inset: 0; display: flex; flex-direction: column;
-    background: linear-gradient(180deg, rgba(16,16,22,.82) 0%, rgba(8,8,11,.86) 100%);
+    background: linear-gradient(180deg, rgba(15,15,20,.97) 0%, rgba(8,8,11,.99) 100%);
     border: 1px solid var(--line-hi);
     border-radius: var(--radius);
     overflow: hidden;
@@ -59,7 +59,7 @@
   .dot.wait { background: var(--amber); box-shadow: 0 0 9px var(--amber); }
 
   .tb-btn {
-    width: 34px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+    width: 36px; height: 28px; border-radius: 8px; margin-left: 4px; display: grid; place-items: center;
     color: #a8a8b8; font-size: 13px; line-height: 1;
     transition: background .12s, color .12s, box-shadow .12s;
   }
@@ -71,7 +71,6 @@
     box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .38), 0 0 14px -4px rgba(251, 191, 36, .5);
   }
   .tb-btn.close:hover { background: rgba(248, 113, 113, .18); color: #ffb4b4; box-shadow: inset 0 0 0 1px rgba(248,113,113,.4); }
-  .tb-sep { width: 1px; height: 16px; background: var(--line-hi); margin: 0 6px; }
 
   /* ---------- content ---------- */
   .content { flex: 1; overflow: auto; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
@@ -153,8 +152,6 @@
         <span class="chip"><span class="dot wait" id="tunnelDot"></span><span id="tunnelLabel">туннель…</span></span>
       </div>
     </div>
-    <button class="tb-btn active" id="tbBlur" title="Блюр фона">◍</button>
-    <div class="tb-sep"></div>
     <button class="tb-btn min" id="tbMin" title="Свернуть">─</button>
     <button class="tb-btn close" id="tbClose" title="Свернуть в трей">✕</button>
   </div>
@@ -209,7 +206,6 @@
   let state = null;
   let journalEntries = [];
   let keyVisible = false;
-  let blurEnabled = true;
   let dragging = false;
   let toastTimer = null;
 
@@ -254,15 +250,6 @@
 
   $("tbMin").addEventListener("click", () => appWindow.minimize());
   $("tbClose").addEventListener("click", () => appWindow.close());
-
-  $("tbBlur").addEventListener("click", async () => {
-    blurEnabled = !blurEnabled;
-    const ok = await invoke("set_blur", { enabled: blurEnabled });
-    blurEnabled = ok ? blurEnabled : !blurEnabled;
-    $("tbBlur").classList.toggle("active", blurEnabled);
-    $("tbBlur").title = blurEnabled ? "Блюр фона: вкл" : "Блюр фона: выкл";
-    toast(blurEnabled ? "Блюр фона включён" : "Блюр фона выключен");
-  });
 
   // ---------------------------------------------------------------- pairing
   function pairingView() {

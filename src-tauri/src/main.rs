@@ -44,26 +44,11 @@ fn main() {
                 .push(&handle, "relay", &format!("релей слушает 127.0.0.1:{port}"));
             relay::serve(Arc::clone(&state), listener);
 
-            // 2. Blur of the desktop behind the frameless window. Acrylic is very
-            //    expensive on Windows 10 (visible drag lag), so there we use the cheaper
-            //    blur-behind, and Mica on Windows 11 where it is the cheapest of all.
+            // 2. Rounded outline at the OS level (see shape.rs). No blur effects:
+            //    DWM blur was both the cause of the drag lag and of the square corners,
+            //    because it paints the full window rectangle.
             if let Some(main) = app.get_webview_window("main") {
-                let build = winapi::windows_build();
-                let effect = if build >= 22000 {
-                    window_vibrancy::apply_mica(&main, Some(true))
-                } else {
-                    window_vibrancy::apply_blur(&main, Some((9, 9, 12, 150)))
-                };
-                match effect {
-                    Ok(()) => {
-                        state.journal.push(&handle, "ui", &format!("блюр включён (build {build})"));
-                    }
-                    Err(error) => {
-                        state.set_blur_enabled(false);
-                        state.journal.push(&handle, "ui", &format!("блюр недоступен: {error}"));
-                    }
-                }
-                shape::apply(&main, state.blur_enabled());
+                shape::apply(&main);
             }
 
             // 3. The overlay cursor must never steal hit-testing from real windows.
@@ -144,7 +129,6 @@ fn main() {
             commands::close_window,
             commands::screenshot,
             commands::pairing_bundle,
-            commands::set_blur,
             commands::open_data_dir,
             commands::quit,
         ])
