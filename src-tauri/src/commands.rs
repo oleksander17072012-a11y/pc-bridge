@@ -56,6 +56,8 @@ pub fn set_blur(state: Shared<'_>, window: tauri::WebviewWindow, enabled: bool) 
     };
     match result {
         Ok(()) => {
+            state.set_blur_enabled(enabled);
+            crate::shape::apply(&window, enabled);
             state.journal.push(
                 &state.app,
                 "ui",
@@ -68,6 +70,12 @@ pub fn set_blur(state: Shared<'_>, window: tauri::WebviewWindow, enabled: bool) 
             false
         }
     }
+}
+
+/// Re-clips the window after a resize (the region is not scaled by the system).
+#[tauri::command]
+pub fn apply_shape(state: Shared<'_>, window: tauri::WebviewWindow) {
+    crate::shape::apply(&window, state.blur_enabled());
 }
 
 #[tauri::command]

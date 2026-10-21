@@ -246,6 +246,12 @@
     setTimeout(() => { dragging = false; }, 400);
   });
 
+  let shapeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(shapeTimer);
+    shapeTimer = setTimeout(() => invoke("apply_shape"), 60);
+  });
+
   $("tbMin").addEventListener("click", () => appWindow.minimize());
   $("tbClose").addEventListener("click", () => appWindow.close());
 

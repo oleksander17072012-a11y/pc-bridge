@@ -127,6 +127,7 @@ extern "system" {
     fn MapVirtualKeyW(code: u32, map_type: u32) -> u32;
     fn GetKeyState(vk: i32) -> i16;
     fn MessageBeep(kind: u32) -> i32;
+    fn SetWindowRgn(hwnd: isize, region: isize, redraw: i32) -> i32;
 }
 
 #[link(name = "gdi32")]
@@ -138,7 +139,16 @@ extern "system" {
     fn GetDIBits(hdc: isize, bitmap: isize, start: u32, lines: u32, bits: *mut u8, info: *mut BITMAPINFO, usage: u32) -> i32;
     fn DeleteObject(object: isize) -> i32;
     fn DeleteDC(hdc: isize) -> i32;
+    fn CreateRoundRectRgn(left: i32, top: i32, right: i32, bottom: i32, width: i32, height: i32) -> isize;
 }
+
+#[link(name = "dwmapi")]
+extern "system" {
+    fn DwmSetWindowAttribute(hwnd: isize, attribute: u32, value: *const std::ffi::c_void, size: u32) -> i32;
+}
+
+const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
+const DWMWCP_ROUND: i32 = 2;
 
 #[link(name = "kernel32")]
 extern "system" {
@@ -637,4 +647,40 @@ pub fn screen_size() -> (i32, i32) {
 /// normally true; it is shown in the UI as a fact, not as something to toggle.
 pub fn is_elevated() -> bool {
     unsafe { IsUserAnAdmin() != 0 }
+}
+
+// ---------------------------------------------------------------- window shape
+
+/// Clips the window to a rounded rectangle.
+///
+/// Needed on Windows 10: a DWM blur (acrylic / blur-behind) paints the whole window
+/// rectangle, so CSS `border-radius` alone leaves square, blurred corners. The region
+/// makes the system clip both the window and its blur.
+pub fn set_round_region(hwnd: isize, width: i32, height: i32, radius: i32) {
+    unsafe {
+        let region = CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2);
+        if region != 0 {
+            // On success the system owns the region, do not delete it.
+            SetWindowRgn(hwnd, region, 1);
+        }
+    }
+}
+
+pub fn clear_region(hwnd: isize) {
+    unsafe {
+        SetWindowRgn(hwnd, 0, 1);
+    }
+}
+
+/// Asks DWM for native (anti-aliased) rounded corners, the Windows 11 way.
+pub fn prefer_round_corners(hwnd: isize) {
+    let preference = DWMWCP_ROUND;
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            &preference as *const i32 as *const std::ffi::c_void,
+            std::mem::size_of::<i32>() as u32,
+        );
+    }
 }

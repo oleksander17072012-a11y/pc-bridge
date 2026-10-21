@@ -23,6 +23,7 @@ pub struct AppState {
     key: Mutex<String>,
     port: Mutex<u16>,
     active: AtomicBool,
+    blur: AtomicBool,
     cursor: Mutex<Option<(i32, i32)>>,
     windows: Mutex<Vec<WindowInfo>>,
     started: Instant,
@@ -45,6 +46,7 @@ impl AppState {
             key: Mutex::new(key),
             port: Mutex::new(0),
             active: AtomicBool::new(true),
+            blur: AtomicBool::new(true),
             cursor: Mutex::new(None),
             windows: Mutex::new(Vec::new()),
             started: Instant::now(),
@@ -115,6 +117,14 @@ impl AppState {
 
     pub fn uptime_seconds(&self) -> u64 {
         self.started.elapsed().as_secs()
+    }
+
+    pub fn set_blur_enabled(&self, enabled: bool) {
+        self.blur.store(enabled, Ordering::Relaxed);
+    }
+
+    pub fn blur_enabled(&self) -> bool {
+        self.blur.load(Ordering::Relaxed)
     }
 
     /// The virtual cursor is permanent: there is no toggle in the UI any more.

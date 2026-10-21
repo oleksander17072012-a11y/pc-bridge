@@ -10,6 +10,7 @@ mod journal;
 mod paths;
 mod prompt;
 mod relay;
+mod shape;
 mod shell;
 mod state;
 mod tunnel;
@@ -55,8 +56,12 @@ fn main() {
                 };
                 match effect {
                     Ok(()) => state.journal.push(&handle, "ui", &format!("блюр включён (build {build})")),
-                    Err(error) => state.journal.push(&handle, "ui", &format!("блюр недоступен: {error}")),
+                    Err(error) => {
+                        state.set_blur_enabled(false);
+                        state.journal.push(&handle, "ui", &format!("блюр недоступен: {error}"));
+                    }
                 };
+                shape::apply(&main, state.blur_enabled());
             }
 
             // 3. The overlay cursor must never steal hit-testing from real windows.
@@ -131,6 +136,7 @@ fn main() {
             commands::set_active,
             commands::rotate_key,
             commands::restart_tunnel,
+            commands::apply_shape,
             commands::refresh_windows,
             commands::activate_window,
             commands::close_window,
