@@ -127,6 +127,7 @@ extern "system" {
     fn MapVirtualKeyW(code: u32, map_type: u32) -> u32;
     fn GetKeyState(vk: i32) -> i16;
     fn MessageBeep(kind: u32) -> i32;
+    fn SetWindowRgn(hwnd: isize, region: isize, redraw: i32) -> i32;
 }
 
 #[link(name = "gdi32")]
@@ -138,6 +139,7 @@ extern "system" {
     fn GetDIBits(hdc: isize, bitmap: isize, start: u32, lines: u32, bits: *mut u8, info: *mut BITMAPINFO, usage: u32) -> i32;
     fn DeleteObject(object: isize) -> i32;
     fn DeleteDC(hdc: isize) -> i32;
+    fn CreateRoundRectRgn(left: i32, top: i32, right: i32, bottom: i32, width: i32, height: i32) -> isize;
 }
 
 #[link(name = "dwmapi")]
@@ -659,5 +661,27 @@ pub fn prefer_round_corners(hwnd: isize) {
             &preference as *const i32 as *const std::ffi::c_void,
             std::mem::size_of::<i32>() as u32,
         );
+    }
+}
+
+/// Clips the window to a rounded rectangle.
+///
+/// This is the only mechanism that rounds the outline no matter what is painted
+/// inside: a transparent window cannot be relied on (the WebView2 surface may stay
+/// opaque), and a DWM blur paints the full window rectangle. The region is applied by
+/// the compositor, so it also survives repaints.
+pub fn set_round_region(hwnd: isize, width: i32, height: i32, radius: i32) {
+    unsafe {
+        let region = CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2);
+        if region != 0 {
+            // On success the system owns the region, so it must not be deleted here.
+            SetWindowRgn(hwnd, region, 1);
+        }
+    }
+}
+
+pub fn clear_region(hwnd: isize) {
+    unsafe {
+        SetWindowRgn(hwnd, 0, 1);
     }
 }

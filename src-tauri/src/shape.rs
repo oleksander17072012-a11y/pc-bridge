@@ -2,14 +2,17 @@ use tauri::WebviewWindow;
 
 use crate::winapi;
 
-/// The window outline.
+/// Radius in CSS pixels; the stylesheet uses the same value for the shell surface.
+pub const CORNER_RADIUS: f64 = 18.0;
+
+/// Rounds the window outline.
 ///
-/// The window is frameless and fixed-size on purpose: without `WS_THICKFRAME` Windows
-/// stops drawing its own 1 px outline and resize shadow around the window, which used
-/// to show up as light "walls" along the edges. With no DWM effect and a transparent
-/// webview, the rounded corners are drawn by CSS and are properly anti-aliased.
+/// * Windows 11 — native DWM rounding, anti-aliased, no clipping needed.
+/// * Windows 10 — a rounded window region: the only reliable way there, because the
+///   WebView2 surface paints an opaque rectangle and DWM has no corner preference.
 ///
-/// Windows 11 additionally gets DWM rounding so the corners match the system style.
+/// The region is set one pixel wider than the CSS radius so the anti-aliased CSS edge
+/// stays inside the clip instead of being cut off.
 pub fn apply(window: &WebviewWindow) {
     let Ok(handle) = window.hwnd() else { return };
     let hwnd = handle.0 as isize;
@@ -19,7 +22,17 @@ pub fn apply(window: &WebviewWindow) {
 
     if winapi::windows_build() >= 22000 {
         winapi::prefer_round_corners(hwnd);
+        winapi::clear_region(hwnd);
+        return;
     }
-    // No window region: it is rectangular by nature and produced hard, unrounded
-    // corner pixels, so CSS owns the shape.
+
+    if window.is_maximized().unwrap_or(false) {
+        winapi::clear_region(hwnd);
+        return;
+    }
+
+    let Ok(size) = window.inner_size() else { return };
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let radius = (CORNER_RADIUS * scale).round().max(1.0) as i32;
+    winapi::set_round_region(hwnd, size.width as i32, size.height as i32, radius);
 }

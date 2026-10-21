@@ -48,7 +48,13 @@ fn main() {
             //    DWM effects painted the full window rectangle (square corners, drag lag)
             //    and the thick frame drew a light outline along the edges.
             if let Some(main) = app.get_webview_window("main") {
-                shape::apply(&main);
+                // Give the window a moment to reach its final size, then clip it.
+                let target = main.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    let clone = target.clone();
+                    let _ = target.run_on_main_thread(move || shape::apply(&clone));
+                });
             }
 
             // 3. The overlay cursor must never steal hit-testing from real windows.

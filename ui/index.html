@@ -16,20 +16,14 @@
     --green: #34d399;
     --red: #f87171;
     --amber: #fbbf24;
-    --radius: 16px;
+    --radius: 18px;
   }
   * { box-sizing: border-box; }
-  html { height: 100%; margin: 0; background: transparent; }
-  body {
-    height: 100%; margin: 0; overflow: hidden;
-    background: #0a0a0e;
-    border-radius: var(--radius);
-  }
+  html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; }
   body {
     color: var(--text);
     font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    border-radius: var(--radius);
   }
   button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
   ::-webkit-scrollbar { width: 9px; height: 9px; }
