@@ -205,7 +205,13 @@ fn extract_url(line: &str) -> Option<String> {
     while let Some(index) = rest.find("https://") {
         let tail = &rest[index..];
         let end = tail
-            .find(|character: char| !(character.is_ascii_alphanumeric() || character == '-' || character == '.' || character == ':'))
+            .find(|character: char| {
+                !(character.is_ascii_alphanumeric()
+                    || character == '-'
+                    || character == '.'
+                    || character == ':'
+                    || character == '/')
+            })
             .unwrap_or(tail.len());
         let candidate = &tail[..end];
         if candidate.contains(".trycloudflare.com") {
