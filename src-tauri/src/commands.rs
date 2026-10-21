@@ -28,11 +28,6 @@ pub fn set_active(state: Shared<'_>, active: bool) {
 }
 
 #[tauri::command]
-pub fn toggle_overlay(state: Shared<'_>, enabled: bool) {
-    state.set_overlay(enabled);
-}
-
-#[tauri::command]
 pub fn rotate_key(state: Shared<'_>) -> String {
     state.rotate_key();
     state.pairing_block()
@@ -47,10 +42,17 @@ pub fn pairing_bundle(state: Shared<'_>) -> String {
 
 #[tauri::command]
 pub fn set_blur(state: Shared<'_>, window: tauri::WebviewWindow, enabled: bool) -> bool {
-    let result = if enabled {
-        window_vibrancy::apply_acrylic(&window, Some((9, 9, 12, 150)))
+    // Same choice as at startup: Mica on Windows 11, cheap blur-behind on Windows 10.
+    let result = if winapi::windows_build() >= 22000 {
+        if enabled {
+            window_vibrancy::apply_mica(&window, Some(true))
+        } else {
+            window_vibrancy::clear_mica(&window)
+        }
+    } else if enabled {
+        window_vibrancy::apply_blur(&window, Some((9, 9, 12, 150)))
     } else {
-        window_vibrancy::clear_acrylic(&window)
+        window_vibrancy::clear_blur(&window)
     };
     match result {
         Ok(()) => {
@@ -94,12 +96,6 @@ pub async fn screenshot(_state: Shared<'_>) -> Result<String, String> {
         .await
         .map_err(|error| error.to_string())??;
     Ok(b64::encode(&shot.jpeg))
-}
-
-#[tauri::command]
-pub fn elevate(state: Shared<'_>) -> Result<(), String> {
-    state.journal.push(&state.app, "admin", "запрошен перезапуск с правами администратора");
-    winapi::relaunch_elevated()
 }
 
 #[tauri::command]

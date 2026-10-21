@@ -23,7 +23,6 @@ pub struct AppState {
     key: Mutex<String>,
     port: Mutex<u16>,
     active: AtomicBool,
-    overlay: AtomicBool,
     cursor: Mutex<Option<(i32, i32)>>,
     windows: Mutex<Vec<WindowInfo>>,
     started: Instant,
@@ -46,7 +45,6 @@ impl AppState {
             key: Mutex::new(key),
             port: Mutex::new(0),
             active: AtomicBool::new(true),
-            overlay: AtomicBool::new(true),
             cursor: Mutex::new(None),
             windows: Mutex::new(Vec::new()),
             started: Instant::now(),
@@ -119,24 +117,12 @@ impl AppState {
         self.started.elapsed().as_secs()
     }
 
-    pub fn set_overlay(&self, enabled: bool) {
-        self.overlay.store(enabled, Ordering::Relaxed);
-        if !enabled {
-            if let Some(window) = self.app.get_webview_window("overlay") {
-                let _ = window.hide();
-            }
-        }
-        let _ = self.app.emit("state", self.snapshot());
-    }
-
+    /// The virtual cursor is permanent: there is no toggle in the UI any more.
     pub fn overlay_enabled(&self) -> bool {
-        self.overlay.load(Ordering::Relaxed)
+        true
     }
 
     pub fn show_overlay(&self, visible: bool) {
-        if !self.overlay_enabled() {
-            return;
-        }
         if let Some(window) = self.app.get_webview_window("overlay") {
             if visible {
                 let (x, y) = self.cursor();
@@ -189,9 +175,6 @@ impl CursorSink for AppState {
 
     fn set_cursor(&self, x: i32, y: i32) {
         *lock(&self.cursor) = Some((x, y));
-        if !self.overlay_enabled() {
-            return;
-        }
         if let Some(window) = self.app.get_webview_window("overlay") {
             let _ = window.set_position(PhysicalPosition::new(x - 24, y - 24));
             if !window.is_visible().unwrap_or(false) {

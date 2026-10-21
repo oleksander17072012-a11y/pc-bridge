@@ -150,14 +150,40 @@ extern "system" {
 #[link(name = "shell32")]
 extern "system" {
     fn IsUserAnAdmin() -> i32;
-    fn ShellExecuteW(
-        hwnd: isize,
-        operation: *const u16,
-        file: *const u16,
-        parameters: *const u16,
-        directory: *const u16,
-        show: i32,
-    ) -> isize;
+}
+
+#[repr(C)]
+struct OsVersionInfoW {
+    size: u32,
+    major: u32,
+    minor: u32,
+    build: u32,
+    platform: u32,
+    service_pack: [u16; 128],
+}
+
+#[link(name = "ntdll")]
+extern "system" {
+    fn RtlGetVersion(info: *mut OsVersionInfoW) -> i32;
+}
+
+/// Real OS build number (`RtlGetVersion` ignores the compatibility shim that makes
+/// `GetVersionEx` lie on Windows 10+). 22000 and above means Windows 11.
+pub fn windows_build() -> u32 {
+    let mut info = OsVersionInfoW {
+        size: std::mem::size_of::<OsVersionInfoW>() as u32,
+        major: 0,
+        minor: 0,
+        build: 0,
+        platform: 0,
+        service_pack: [0; 128],
+    };
+    let status = unsafe { RtlGetVersion(&mut info) };
+    if status == 0 {
+        info.build
+    } else {
+        0
+    }
 }
 
 #[link(name = "bcrypt")]
@@ -607,33 +633,8 @@ pub fn screen_size() -> (i32, i32) {
 
 // ---------------------------------------------------------------- elevation
 
-/// Relaunches the current executable through `ShellExecuteW("runas")`.
-pub fn relaunch_elevated() -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
-    let operation = wide("runas");
-    let file = wide(&exe.to_string_lossy());
-    let parameters: Vec<u16> = std::iter::once(0).collect();
-    let directory = std::env::current_dir()
-        .map(|path| wide(&path.to_string_lossy()))
-        .unwrap_or_else(|_| std::iter::once(0).collect());
-    unsafe {
-        let result = ShellExecuteW(
-            null_mut::<std::ffi::c_void>() as isize,
-            operation.as_ptr(),
-            file.as_ptr(),
-            parameters.as_ptr(),
-            directory.as_ptr(),
-            1,
-        );
-        // ShellExecuteW returns a value > 32 on success.
-        if result as usize > 32 {
-            Ok(())
-        } else {
-            Err(format!("UAC отклонён или недоступен (код {})", result as usize))
-        }
-    }
-}
-
+/// The executable carries `requireAdministrator` in its manifest, so this is
+/// normally true; it is shown in the UI as a fact, not as something to toggle.
 pub fn is_elevated() -> bool {
     unsafe { IsUserAnAdmin() != 0 }
 }

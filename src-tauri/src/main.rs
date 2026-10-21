@@ -43,10 +43,18 @@ fn main() {
                 .push(&handle, "relay", &format!("релей слушает 127.0.0.1:{port}"));
             relay::serve(Arc::clone(&state), listener);
 
-            // 2. Acrylic blur of the desktop behind the frameless window.
+            // 2. Blur of the desktop behind the frameless window. Acrylic is very
+            //    expensive on Windows 10 (visible drag lag), so there we use the cheaper
+            //    blur-behind, and Mica on Windows 11 where it is the cheapest of all.
             if let Some(main) = app.get_webview_window("main") {
-                match window_vibrancy::apply_acrylic(&main, Some((9, 9, 12, 150))) {
-                    Ok(()) => state.journal.push(&handle, "ui", "акриловый блюр включён"),
+                let build = winapi::windows_build();
+                let effect = if build >= 22000 {
+                    window_vibrancy::apply_mica(&main, Some(true))
+                } else {
+                    window_vibrancy::apply_blur(&main, Some((9, 9, 12, 150)))
+                };
+                match effect {
+                    Ok(()) => state.journal.push(&handle, "ui", &format!("блюр включён (build {build})")),
                     Err(error) => state.journal.push(&handle, "ui", &format!("блюр недоступен: {error}")),
                 };
             }
@@ -121,7 +129,6 @@ fn main() {
             commands::snapshot,
             commands::journal_tail,
             commands::set_active,
-            commands::toggle_overlay,
             commands::rotate_key,
             commands::restart_tunnel,
             commands::refresh_windows,
@@ -130,7 +137,6 @@ fn main() {
             commands::screenshot,
             commands::pairing_bundle,
             commands::set_blur,
-            commands::elevate,
             commands::open_data_dir,
             commands::quit,
         ])

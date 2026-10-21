@@ -6,7 +6,6 @@
 <title>PC-Bridge</title>
 <style>
   :root {
-    --bg: rgba(9, 9, 12, 0.72);
     --card: rgba(20, 20, 26, 0.55);
     --card-2: rgba(13, 13, 17, 0.6);
     --line: rgba(255, 255, 255, 0.07);
@@ -27,13 +26,11 @@
     -webkit-font-smoothing: antialiased;
     border-radius: var(--radius);
   }
-  body.maximized { border-radius: 0; }
   button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
   ::-webkit-scrollbar-track { background: transparent; }
 
-  /* ---------- frameless shell ---------- */
   .shell {
     position: fixed; inset: 0; display: flex; flex-direction: column;
     background: linear-gradient(180deg, rgba(16,16,22,.82) 0%, rgba(8,8,11,.86) 100%);
@@ -42,25 +39,19 @@
     overflow: hidden;
     box-shadow: 0 24px 70px -28px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.06);
   }
-  body.maximized .shell { border-radius: 0; border-color: transparent; }
 
   /* ---------- custom title bar ---------- */
   .titlebar {
-    height: 46px; flex: 0 0 46px; display: flex; align-items: center; gap: 10px;
+    height: 44px; flex: 0 0 44px; display: flex; align-items: center;
     padding: 0 6px 0 14px; user-select: none;
     border-bottom: 1px solid var(--line);
     background: linear-gradient(180deg, rgba(255,255,255,.035), transparent);
   }
-  .drag { flex: 1; align-self: stretch; display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .logo {
-    width: 24px; height: 24px; border-radius: 8px; flex: 0 0 auto;
-    background: linear-gradient(145deg, #7b98ff, #3d5bdb);
-    box-shadow: 0 0 0 1px rgba(127,155,255,.35), 0 6px 18px -8px #6c8cffcc;
-    display: grid; place-items: center; font-size: 10.5px; font-weight: 700; letter-spacing: .3px;
+  .drag {
+    flex: 1; align-self: stretch; display: flex; align-items: center; gap: 16px;
+    min-width: 0; cursor: default; -webkit-app-region: no-drag;
   }
-  .tb-title { font-size: 12.5px; font-weight: 600; letter-spacing: .3px; white-space: nowrap; }
-  .tb-sub { color: #5d5d6b; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
-  .tb-status { display: flex; align-items: center; gap: 12px; margin-left: 4px; }
+  .tb-status { display: flex; align-items: center; gap: 16px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .2s, box-shadow .2s; }
   .dot.on { background: var(--green); box-shadow: 0 0 9px var(--green); }
@@ -68,13 +59,19 @@
   .dot.wait { background: var(--amber); box-shadow: 0 0 9px var(--amber); }
 
   .tb-btn {
-    width: 34px; height: 30px; border-radius: 8px; display: grid; place-items: center;
-    color: #a8a8b8; font-size: 13px; transition: background .13s, color .13s;
+    width: 34px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+    color: #a8a8b8; font-size: 13px; line-height: 1;
+    transition: background .12s, color .12s, box-shadow .12s;
   }
   .tb-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
   .tb-btn.active { color: #9db4ff; }
-  .tb-btn.close:hover { background: #c0392b; color: #fff; }
-  .tb-sep { width: 1px; height: 18px; background: var(--line-hi); margin: 0 4px; }
+  .tb-btn.min:hover {
+    background: rgba(251, 191, 36, .16);
+    color: var(--amber);
+    box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .38), 0 0 14px -4px rgba(251, 191, 36, .5);
+  }
+  .tb-btn.close:hover { background: rgba(248, 113, 113, .18); color: #ffb4b4; box-shadow: inset 0 0 0 1px rgba(248,113,113,.4); }
+  .tb-sep { width: 1px; height: 16px; background: var(--line-hi); margin: 0 6px; }
 
   /* ---------- content ---------- */
   .content { flex: 1; overflow: auto; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
@@ -82,7 +79,6 @@
   .card {
     background: linear-gradient(180deg, var(--card) 0%, var(--card-2) 100%);
     border: 1px solid var(--line); border-radius: 14px; padding: 15px 16px;
-    backdrop-filter: blur(2px);
   }
   .card h2 {
     margin: 0 0 11px; font-size: 11px; letter-spacing: .9px; text-transform: uppercase;
@@ -111,7 +107,6 @@
   .btn.ghost { background: transparent; }
   .btn.danger { border-color: rgba(248,113,113,.28); color: #ffb4b4; background: rgba(248,113,113,.07); }
   .btn.danger:hover { background: rgba(248,113,113,.14); }
-  .btn:disabled { opacity: .45; cursor: not-allowed; }
 
   .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 9px; }
   @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -146,18 +141,13 @@
     box-shadow: 0 12px 40px -14px #000;
   }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
-  footer { display: flex; align-items: center; gap: 10px; color: #4f4f5c; font-size: 10.5px; }
   .spacer { flex: 1; }
 </style>
 </head>
 <body>
 <div class="shell">
-  <!-- custom title bar -->
   <div class="titlebar">
-    <div class="drag" data-tauri-drag-region>
-      <div class="logo">PB</div>
-      <span class="tb-title" data-tauri-drag-region>PC-Bridge</span>
-      <span class="tb-sub" data-tauri-drag-region>rust · tauri 2</span>
+    <div class="drag" id="dragZone">
       <div class="tb-status">
         <span class="chip"><span class="dot wait" id="agentDot"></span><span id="agentLabel">запуск…</span></span>
         <span class="chip"><span class="dot wait" id="tunnelDot"></span><span id="tunnelLabel">туннель…</span></span>
@@ -165,8 +155,7 @@
     </div>
     <button class="tb-btn active" id="tbBlur" title="Блюр фона">◍</button>
     <div class="tb-sep"></div>
-    <button class="tb-btn" id="tbMin" title="Свернуть">─</button>
-    <button class="tb-btn" id="tbMax" title="Развернуть">□</button>
+    <button class="tb-btn min" id="tbMin" title="Свернуть">─</button>
     <button class="tb-btn close" id="tbClose" title="Свернуть в трей">✕</button>
   </div>
 
@@ -175,11 +164,11 @@
       <h2>Ключ подключения <span class="hint">одна кнопка — ключ и промпт одним текстом</span></h2>
       <textarea id="pairing" readonly spellcheck="false"></textarea>
       <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="copyBtn">📋 Копировать ключ + промпт</button>
+        <button class="btn primary" id="copyBtn">Копировать ключ + промпт</button>
         <button class="btn" id="copyKeyBtn">Ключ</button>
-        <button class="btn ghost" id="revealBtn">👁 Показать ключ</button>
-        <button class="btn ghost" id="rotateBtn">🎲 Новый ключ</button>
-        <button class="btn ghost" id="tunnelBtn">⟳ Обновить туннель</button>
+        <button class="btn ghost" id="revealBtn">Показать ключ</button>
+        <button class="btn ghost" id="rotateBtn">Новый ключ</button>
+        <button class="btn ghost" id="tunnelBtn">Обновить туннель</button>
       </div>
     </section>
 
@@ -194,11 +183,9 @@
         <div class="stat"><div class="k">Права</div><div class="v" id="sAdmin">—</div></div>
       </div>
       <div class="row" style="margin-top:11px">
-        <button class="btn" id="pauseBtn">⏸ Пауза</button>
-        <button class="btn" id="overlayBtn">◌ Курсор: вкл</button>
-        <button class="btn" id="shotBtn">🖼 Скриншот</button>
-        <button class="btn" id="adminBtn">🛡 Администратор</button>
-        <button class="btn ghost" id="folderBtn">📁 Папка данных</button>
+        <button class="btn" id="pauseBtn">Пауза</button>
+        <button class="btn" id="shotBtn">Скриншот</button>
+        <button class="btn ghost" id="folderBtn">Папка данных</button>
         <div class="spacer"></div>
         <button class="btn danger" id="quitBtn">Закрыть совсем</button>
       </div>
@@ -209,12 +196,6 @@
       <h2>Журнал действий <span class="hint">дублируется в pc_agent_log.txt</span></h2>
       <div class="journal" id="journal"></div>
     </section>
-
-    <footer>
-      <span>v<span id="version">—</span></span>
-      <div class="spacer"></div>
-      <span>системный курсор не перемещается · фон · Win32 PostMessage</span>
-    </footer>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -229,6 +210,7 @@
   let journalEntries = [];
   let keyVisible = false;
   let blurEnabled = true;
+  let dragging = false;
   let toastTimer = null;
 
   function toast(message) {
@@ -255,19 +237,17 @@
   }
 
   // ---------------------------------------------------------------- window controls
-  async function syncMaximized() {
-    try {
-      const maximized = await appWindow.isMaximized();
-      document.body.classList.toggle("maximized", !!maximized);
-      $("tbMax").textContent = maximized ? "❐" : "□";
-    } catch (error) { /* ignore */ }
-  }
+  // Native drag: one Win32 call on mousedown instead of a JS-driven loop, which is
+  // what made the window lag behind the pointer on Windows 10.
+  $("dragZone").addEventListener("mousedown", (event) => {
+    if (event.button !== 0) return;
+    dragging = true;
+    appWindow.startDragging();
+    setTimeout(() => { dragging = false; }, 400);
+  });
 
   $("tbMin").addEventListener("click", () => appWindow.minimize());
-  $("tbMax").addEventListener("click", () => appWindow.toggleMaximize().then(syncMaximized));
   $("tbClose").addEventListener("click", () => appWindow.close());
-  appWindow.listen("tauri://resize", syncMaximized);
-  window.addEventListener("resize", syncMaximized);
 
   $("tbBlur").addEventListener("click", async () => {
     blurEnabled = !blurEnabled;
@@ -316,7 +296,7 @@
   $("revealBtn").addEventListener("click", () => {
     keyVisible = !keyVisible;
     $("pairing").value = pairingView();
-    $("revealBtn").textContent = keyVisible ? "🙈 Скрыть ключ" : "👁 Показать ключ";
+    $("revealBtn").textContent = keyVisible ? "Скрыть ключ" : "Показать ключ";
   });
 
   $("rotateBtn").addEventListener("click", async () => {
@@ -337,7 +317,7 @@
     if (!next) return;
     state = next;
     $("pairing").value = pairingView();
-    $("revealBtn").textContent = keyVisible ? "🙈 Скрыть ключ" : "👁 Показать ключ";
+    $("revealBtn").textContent = keyVisible ? "Скрыть ключ" : "Показать ключ";
 
     const tunnelHost = (next.tunnel_url || "").replace(/^https?:\/\//, "");
     $("sTunnel").textContent = tunnelHost || "нет связи";
@@ -349,16 +329,13 @@
     $("sCounters").textContent = `${next.commands || 0} / ${next.notes || 0}`;
     $("sAdmin").textContent = next.elevated_hint ? "администратор" : "пользователь";
     $("sAdmin").style.color = next.elevated_hint ? "var(--amber)" : "var(--muted)";
-    $("version").textContent = next.version || "—";
 
     $("agentDot").className = "dot " + (next.active ? "on" : "off");
     $("agentLabel").textContent = next.active ? "агент активен" : "пауза";
-    $("pauseBtn").textContent = next.active ? "⏸ Пауза" : "▶ Продолжить";
+    $("pauseBtn").textContent = next.active ? "Пауза" : "Продолжить";
 
     $("tunnelDot").className = "dot " + (next.tunnel_url ? "on" : "wait");
     $("tunnelLabel").textContent = next.tunnel_url ? "туннель готов" : "поднимаю туннель";
-
-    $("overlayBtn").textContent = next.overlay ? "◌ Курсор: вкл" : "◌ Курсор: выкл";
   }
 
   function entryHtml(entry) {
@@ -383,6 +360,7 @@
   }
 
   async function refreshState() {
+    if (dragging) return; // do not repaint the UI while the window is being moved
     try {
       renderState(await invoke("snapshot"));
     } catch (error) { /* окно ещё поднимается */ }
@@ -400,11 +378,6 @@
     refreshState();
   });
 
-  $("overlayBtn").addEventListener("click", async () => {
-    await invoke("toggle_overlay", { enabled: !(state?.overlay ?? true) });
-    refreshState();
-  });
-
   $("shotBtn").addEventListener("click", async () => {
     try {
       const base64 = await invoke("screenshot");
@@ -413,16 +386,6 @@
       toast("Скриншот снят");
     } catch (error) {
       toast("Скриншот не удался: " + error);
-    }
-  });
-
-  $("adminBtn").addEventListener("click", async () => {
-    if (!confirm("Перезапустить мост с правами администратора? После подтверждения UAC все команды, пришедшие через этот ключ, смогут выполняться с повышенными правами.")) return;
-    try {
-      await invoke("elevate");
-      toast("Подтвердите запрос UAC в Windows");
-    } catch (error) {
-      toast(String(error));
     }
   });
 
@@ -437,8 +400,7 @@
 
   refreshState();
   loadJournal();
-  syncMaximized();
-  setInterval(refreshState, 2500);
+  setInterval(refreshState, 3000);
 </script>
 </body>
 </html>
