@@ -1,0 +1,20 @@
+# Rust
+/src-tauri/target/
+/src-tauri/gen/
+**/*.rs.bk
+
+# Tauri leftovers
+/src-tauri/Cargo.lock.bak
+
+# Local runtime state
+*.exe
+*.pdb
+bin/
+pairing.key
+pc_agent_log.txt
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

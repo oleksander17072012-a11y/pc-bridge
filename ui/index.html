@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PC-Bridge</title>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: #0a0a0c;
+    --card: #101014;
+    --card-hi: #16161c;
+    --line: #1f1f26;
+    --text: #ececf1;
+    --muted: #8b8b98;
+    --accent: #6c8cff;
+    --green: #34d399;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #11131c 0%, var(--bg) 55%) fixed;
+    color: var(--text);
+    font: 14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #23232c; border-radius: 8px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .app { display: flex; flex-direction: column; height: 100vh; padding: 18px 20px 16px; gap: 14px; }
+
+  header { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 34px; height: 34px; border-radius: 11px; flex: 0 0 auto;
+    background: linear-gradient(145deg, #6c8cff, #3d5bdb);
+    box-shadow: 0 0 0 1px #7f9bff44, 0 8px 26px -10px #6c8cffaa;
+    display: grid; place-items: center; font-weight: 700; font-size: 15px;
+  }
+  .titles { display: flex; flex-direction: column; }
+  .titles b { font-size: 16px; letter-spacing: .2px; }
+  .titles span { color: var(--muted); font-size: 11.5px; letter-spacing: .4px; text-transform: uppercase; }
+  .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px;
+    border-radius: 999px; background: var(--card); border: 1px solid var(--line);
+    font-size: 12px; color: var(--muted); white-space: nowrap;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .dot.off { background: var(--red); box-shadow: 0 0 10px var(--red); }
+  .dot.wait { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+
+  .scroll { overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
+
+  .card {
+    background: linear-gradient(180deg, var(--card) 0%, #0c0c10 100%);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
+  }
+  .card h2 {
+    margin: 0 0 12px; font-size: 12px; letter-spacing: .9px; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: #5d5d6b; }
+
+  textarea {
+    width: 100%; min-height: 96px; resize: vertical; padding: 12px 14px;
+    border-radius: 11px; border: 1px solid var(--line); background: #07070a;
+    color: var(--text); font: 12.5px/1.6 "Cascadia Mono", "Consolas", monospace;
+    outline: none; word-break: break-all;
+  }
+  textarea:focus { border-color: #34405f; }
+
+  .row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+  .row.tight { gap: 8px; }
+
+  .btn {
+    padding: 9px 14px; border-radius: 10px; background: var(--card-hi);
+    border: 1px solid var(--line); color: var(--text); font-size: 13px;
+    transition: background .15s, border-color .15s, transform .08s;
+  }
+  .btn:hover { background: #1d1d25; border-color: #2c2c38; }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: linear-gradient(180deg, #6c8cff, #5573e6); border-color: #7f9bff; color: #fff; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.07); }
+  .btn.danger { border-color: #4a2226; color: #ffb4b4; background: #1a1013; }
+  .btn.danger:hover { background: #241318; }
+  .btn.ghost { background: transparent; }
+  .btn.small { padding: 5px 9px; font-size: 11.5px; border-radius: 8px; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .stat { background: #0b0b0f; border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; }
+  .stat .k { color: var(--muted); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
+  .stat .v { margin-top: 4px; font-size: 13.5px; word-break: break-all; font-variant-numeric: tabular-nums; }
+  .mono { font-family: "Cascadia Mono", "Consolas", monospace; font-size: 12px; }
+
+  .journal { display: flex; flex-direction: column; gap: 1px; max-height: 260px; overflow: auto; }
+  .entry { display: grid; grid-template-columns: 138px 62px 1fr; gap: 10px; padding: 5px 8px; border-radius: 8px; font-size: 12.5px; }
+  .entry:hover { background: #12121a; }
+  .entry .t { color: #5f5f70; font-family: "Cascadia Mono", monospace; font-size: 11.5px; }
+  .entry .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); align-self: center; }
+  .entry.shell .k { color: #7dd3fc; }
+  .entry.gui .k { color: #c4b5fd; }
+  .entry.note .k { color: #fcd34d; }
+  .entry.tunnel .k { color: #6ee7b7; }
+  .entry.key .k, .entry.admin .k { color: #fca5a5; }
+  .entry .m { color: #d5d5e0; word-break: break-word; }
+
+  .winlist { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow: auto; }
+  .win {
+    display: flex; align-items: center; gap: 10px; padding: 8px 11px;
+    background: #0b0b0f; border: 1px solid var(--line); border-radius: 10px;
+  }
+  .win .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .win .proc { color: var(--muted); font-size: 11.5px; font-family: "Cascadia Mono", monospace; white-space: nowrap; }
+
+  .shot-wrap { margin-top: 12px; display: none; }
+  .shot-wrap.show { display: block; }
+  .shot-wrap img { width: 100%; border-radius: 10px; border: 1px solid var(--line); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px);
+    background: #16161f; border: 1px solid #2a2a36; color: var(--text);
+    padding: 10px 16px; border-radius: 11px; font-size: 13px; opacity: 0;
+    transition: opacity .18s, transform .18s; pointer-events: none; max-width: 78vw;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  footer { display: flex; align-items: center; gap: 10px; color: #55555f; font-size: 11px; }
+  .kv { display: flex; gap: 6px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">PB</div>
+    <div class="titles">
+      <b>PC-Bridge</b>
+      <span>Rust · Tauri 2 · Windows</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="pill"><span class="dot wait" id="agentDot"></span><span id="agentLabel">запуск…</span></div>
+    <div class="pill"><span class="dot wait" id="tunnelDot"></span><span id="tunnelLabel">туннель…</span></div>
+  </header>
+
+  <div class="scroll">
+    <section class="card">
+      <h2>Ключ подключения <span class="hint">вставьте этот блок в чат — он даёт доступ к ПК</span></h2>
+      <textarea id="pairing" readonly spellcheck="false"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="copyBtn">📋 Копировать ключ</button>
+        <button class="btn" id="rotateBtn">🎲 Новый ключ</button>
+        <button class="btn ghost" id="tunnelBtn">⟳ Обновить туннель</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Состояние</h2>
+      <div class="grid">
+        <div class="stat"><div class="k">Туннель</div><div class="v mono" id="sTunnel">—</div></div>
+        <div class="stat"><div class="k">Локальный релей</div><div class="v mono" id="sPort">—</div></div>
+        <div class="stat"><div class="k">Хост</div><div class="v" id="sHost">—</div></div>
+        <div class="stat"><div class="k">Работает</div><div class="v" id="sUptime">—</div></div>
+        <div class="stat"><div class="k">Задач / заметок</div><div class="v" id="sCounters">—</div></div>
+        <div class="stat"><div class="k">Права</div><div class="v" id="sAdmin">—</div></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="pauseBtn">⏸ Пауза</button>
+        <button class="btn" id="overlayBtn">◌ Виртуальный курсор: вкл</button>
+        <button class="btn" id="shotBtn">🖼 Скриншот</button>
+        <button class="btn" id="adminBtn">🛡 Права администратора</button>
+        <button class="btn ghost" id="folderBtn">📁 Папка данных</button>
+        <div class="spacer"></div>
+        <button class="btn danger" id="quitBtn">Закрыть совсем</button>
+      </div>
+      <div class="shot-wrap" id="shotWrap"><img id="shotImg" alt="скриншот экрана" /></div>
+    </section>
+
+    <section class="card">
+      <h2>Журнал действий <span class="hint">дублируется в pc_agent_log.txt</span></h2>
+      <div class="journal" id="journal"></div>
+    </section>
+
+    <section class="card">
+      <h2>Окна <span class="hint">только чтение списка; действия — по кнопке</span>
+        <span class="spacer"></span>
+        <button class="btn small ghost" id="refreshWins">обновить</button>
+      </h2>
+      <div class="winlist" id="winlist"></div>
+    </section>
+
+    <footer>
+      <div class="kv"><span>v<span id="version">—</span></span></div>
+      <div class="spacer"></div>
+      <div>системный курсор не перемещается · фон · Win32 PostMessage</div>
+    </footer>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  const { invoke } = window.__TAURI__.core;
+  const { listen } = window.__TAURI__.event;
+
+  const $ = (id) => document.getElementById(id);
+  let state = null;
+  let journalEntries = [];
+  let toastTimer = null;
+
+  function toast(message) {
+    const node = $("toast");
+    node.textContent = message;
+    node.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => node.classList.remove("show"), 3200);
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+
+  function formatUptime(seconds) {
+    const total = Math.max(0, Math.floor(seconds || 0));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (h) return `${h} ч ${m} мин`;
+    if (m) return `${m} мин ${s} с`;
+    return `${s} с`;
+  }
+
+  function renderState(next) {
+    if (!next) return;
+    state = next;
+    $("pairing").value = next.pairing || "";
+    $("sTunnel").textContent = next.tunnel_url || "нет связи";
+    $("sTunnel").style.color = next.tunnel_url ? "var(--green)" : "var(--red)";
+    $("sPort").textContent = next.port ? `127.0.0.1:${next.port}` : "—";
+    $("sHost").textContent = next.hostname || "—";
+    $("sUptime").textContent = formatUptime(next.uptime_seconds);
+    $("sCounters").textContent = `${next.commands || 0} / ${next.notes || 0}`;
+    $("sAdmin").textContent = next.elevated_hint ? "администратор" : "пользователь";
+    $("sAdmin").style.color = next.elevated_hint ? "var(--amber)" : "var(--muted)";
+    $("version").textContent = next.version || "—";
+
+    const agentDot = $("agentDot");
+    agentDot.className = "dot " + (next.active ? "on" : "off");
+    $("agentLabel").textContent = next.active ? "агент активен" : "пауза";
+    $("pauseBtn").textContent = next.active ? "⏸ Пауза" : "▶ Продолжить";
+
+    const tunnelDot = $("tunnelDot");
+    tunnelDot.className = "dot " + (next.tunnel_url ? "on" : "wait");
+    $("tunnelLabel").textContent = next.tunnel_url ? "туннель готов" : "поднимаю туннель";
+
+    $("overlayBtn").textContent = next.overlay ? "◌ Виртуальный курсор: вкл" : "◌ Виртуальный курсор: выкл";
+  }
+
+  function entryHtml(entry) {
+    return `<div class="entry ${escapeHtml(entry.kind)}">
+      <span class="t">${escapeHtml(entry.time)}</span>
+      <span class="k">${escapeHtml(entry.kind)}</span>
+      <span class="m">${escapeHtml(entry.text)}</span>
+    </div>`;
+  }
+
+  function renderJournal() {
+    const box = $("journal");
+    box.innerHTML = journalEntries.map(entryHtml).join("");
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function appendEntry(entry) {
+    if (!entry) return;
+    journalEntries.push(entry);
+    if (journalEntries.length > 400) journalEntries = journalEntries.slice(-300);
+    renderJournal();
+  }
+
+  async function refreshState() {
+    try {
+      renderState(await invoke("snapshot"));
+    } catch (error) {
+      toast("Не удалось получить состояние: " + error);
+    }
+  }
+
+  async function loadJournal() {
+    try {
+      journalEntries = await invoke("journal_tail", { limit: 250 });
+      renderJournal();
+    } catch (error) { /* журнал появится позже */ }
+  }
+
+  async function refreshWindows() {
+    try {
+      const windows = await invoke("refresh_windows");
+      const box = $("winlist");
+      if (!windows.length) {
+        box.innerHTML = `<div class="win"><span class="title" style="color:var(--muted)">нет видимых окон</span></div>`;
+        return;
+      }
+      box.innerHTML = windows.map((w) => `
+        <div class="win" data-hwnd="${w.hwnd}">
+          <span class="proc">${escapeHtml(w.process || "—")}</span>
+          <span class="title">${escapeHtml(w.title)}</span>
+          <button class="btn small" data-act="activate" data-hwnd="${w.hwnd}">активировать</button>
+          <button class="btn small danger" data-act="close" data-hwnd="${w.hwnd}">закрыть</button>
+        </div>`).join("");
+    } catch (error) {
+      toast("Список окон недоступен: " + error);
+    }
+  }
+
+  $("winlist").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-act]");
+    if (!button) return;
+    const hwnd = Number(button.dataset.hwnd);
+    if (button.dataset.act === "activate") {
+      await invoke("activate_window", { hwnd });
+    } else {
+      await invoke("close_window", { hwnd });
+      setTimeout(refreshWindows, 700);
+    }
+  });
+
+  $("copyBtn").addEventListener("click", async () => {
+    const block = state?.pairing || $("pairing").value;
+    try {
+      await navigator.clipboard.writeText(block);
+      toast("Ключ скопирован в буфер обмена");
+    } catch (error) {
+      const area = $("pairing");
+      area.select();
+      document.execCommand("copy");
+      toast("Ключ скопирован (fallback)");
+    }
+  });
+
+  $("rotateBtn").addEventListener("click", async () => {
+    if (!confirm("Сгенерировать новый ключ? Старый мгновенно перестанет работать.")) return;
+    const block = await invoke("rotate_key");
+    $("pairing").value = block;
+    toast("Новый ключ создан, старый отозван");
+    refreshState();
+  });
+
+  $("tunnelBtn").addEventListener("click", async () => {
+    await invoke("restart_tunnel");
+    toast("Туннель перезапускается…");
+    refreshState();
+  });
+
+  $("pauseBtn").addEventListener("click", async () => {
+    await invoke("set_active", { active: !(state?.active ?? true) });
+    refreshState();
+  });
+
+  $("overlayBtn").addEventListener("click", async () => {
+    await invoke("toggle_overlay", { enabled: !(state?.overlay ?? true) });
+    refreshState();
+  });
+
+  $("shotBtn").addEventListener("click", async () => {
+    try {
+      const base64 = await invoke("screenshot");
+      $("shotImg").src = "data:image/jpeg;base64," + base64;
+      $("shotWrap").classList.add("show");
+      toast("Скриншот снят");
+    } catch (error) {
+      toast("Скриншот не удался: " + error);
+    }
+  });
+
+  $("adminBtn").addEventListener("click", async () => {
+    if (!confirm("Перезапустить мост с правами администратора? После подтверждения UAC все команды, пришедшие через этот ключ, смогут выполняться с повышенными правами.")) return;
+    try {
+      await invoke("elevate");
+      toast("Подтвердите запрос UAC в Windows");
+    } catch (error) {
+      toast(String(error));
+    }
+  });
+
+  $("folderBtn").addEventListener("click", () => invoke("open_data_dir"));
+  $("refreshWins").addEventListener("click", refreshWindows);
+  $("quitBtn").addEventListener("click", () => {
+    if (confirm("Закрыть PC-Bridge полностью? Мост перестанет работать.")) invoke("quit");
+  });
+
+  listen("journal", (event) => appendEntry(event.payload));
+  listen("state", (event) => renderState(event.payload));
+  listen("tunnel", () => refreshState());
+
+  refreshState();
+  loadJournal();
+  refreshWindows();
+  setInterval(refreshState, 2500);
+  setInterval(refreshWindows, 6000);
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>pc-bridge-cursor</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; cursor: none; }
+  .ring {
+    position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
+    margin: -13px 0 0 -13px; border-radius: 50%;
+    border: 2px solid #6c8cff;
+    box-shadow: 0 0 14px #6c8cffaa, inset 0 0 10px #6c8cff55;
+    transition: transform .12s ease-out, border-color .12s, box-shadow .12s;
+  }
+  .ring.pulse {
+    transform: scale(1.65);
+    border-color: #9db4ff;
+    box-shadow: 0 0 22px #6c8cffee, inset 0 0 14px #6c8cff88;
+  }
+  .core {
+    position: absolute; left: 50%; top: 50%; width: 5px; height: 5px;
+    margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #c7d4ff;
+    box-shadow: 0 0 8px #dbe4ff;
+  }
+</style>
+</head>
+<body>
+  <div class="ring" id="ring"></div>
+  <div class="core"></div>
+<script>
+  const ring = document.getElementById("ring");
+  let timer = null;
+  window.__TAURI__.event.listen("pulse", () => {
+    ring.classList.add("pulse");
+    clearTimeout(timer);
+    timer = setTimeout(() => ring.classList.remove("pulse"), 220);
+  });
+</script>
+</body>
+</html>
