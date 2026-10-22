@@ -14,6 +14,7 @@ mod shape;
 mod shell;
 mod state;
 mod tunnel;
+mod ui_guard;
 mod winapi;
 
 use std::sync::Arc;

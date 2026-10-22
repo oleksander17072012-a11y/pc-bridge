@@ -30,7 +30,7 @@
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
   ::-webkit-scrollbar-track { background: transparent; }
 
-  .shell {
+  .app-shell {
     position: fixed; inset: 0; display: flex; flex-direction: column;
     background: linear-gradient(180deg, #101014 0%, #0a0a0e 100%);
     border-radius: var(--radius);
@@ -84,14 +84,18 @@
   .card h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: #5d5d6b; font-size: 11px; }
 
   textarea {
-    width: 100%; min-height: 92px; resize: vertical; padding: 11px 13px;
+    width: 100%; min-height: 92px; resize: none; padding: 11px 13px;
     border-radius: 11px; border: 1px solid var(--line); background: rgba(5,5,8,.65);
     color: var(--text); font: 12.5px/1.6 "Cascadia Mono", "Consolas", monospace;
     outline: none; word-break: break-all;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.14) transparent;
   }
+  /* WebView2 paints the resize corner and the scrollbar junction white otherwise. */
+  ::-webkit-scrollbar-corner { background: transparent; }
+  textarea::-webkit-resizer { display: none; }
   textarea:focus { border-color: rgba(108,140,255,.45); }
 
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .row { display: flex; gap: 10px; row-gap: 9px; flex-wrap: wrap; align-items: center; }
   .btn {
     padding: 8px 13px; border-radius: 10px; background: rgba(255,255,255,.06);
     border: 1px solid var(--line); color: var(--text); font-size: 12.5px;
@@ -127,6 +131,12 @@
   .entry .t { flex: 0 0 66px; color: #4d4d5c; font-size: 11px; }
   .entry .g { flex: 0 0 13px; text-align: center; font-size: 11px; color: var(--muted); }
   .entry .m { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* A long command or path used to blow the row up and push the panel around. */
+  .entry.long { align-items: flex-start; white-space: normal; }
+  .entry.long .m {
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+    max-height: 6.4em; text-overflow: clip;
+  }
 
   /* stage header: the "этап" of the work */
   .entry.stage {
@@ -151,6 +161,8 @@
   .entry.gui .g { color: #c4b5fd; }
   .entry.ui .g { color: #93c5fd; }
   .entry.key .g, .entry.admin .g { color: #fca5a5; }
+  .entry.agent .g { color: #a3e635; }
+  .entry.relay .g { color: #7dd3fc; }
 
   .stage-chip { max-width: 320px; color: #9db4ff; }
   .stage-chip .stage-mark { color: var(--accent); }
@@ -172,7 +184,7 @@
 </style>
 </head>
 <body>
-<div class="shell">
+<div class="app-shell">
   <div class="titlebar">
     <div class="drag" id="dragZone">
       <div class="tb-status">
@@ -189,7 +201,7 @@
     <section class="card">
       <h2>Ключ подключения</h2>
       <textarea id="pairing" readonly spellcheck="false"></textarea>
-      <div class="row" style="margin-top:10px">
+      <div class="row" style="margin-top:16px">
         <button class="btn primary" id="copyBtn">Копировать ключ + промпт</button>
         <button class="btn" id="copyKeyBtn">Ключ</button>
         <button class="btn ghost" id="revealBtn">Показать ключ</button>
@@ -203,10 +215,7 @@
       <div class="grid">
         <div class="stat"><div class="k">Туннель</div><div class="v mono clip" id="sTunnel" title="">—</div></div>
         <div class="stat"><div class="k">Локальный релей</div><div class="v mono" id="sPort">—</div></div>
-        <div class="stat"><div class="k">Хост</div><div class="v" id="sHost">—</div></div>
         <div class="stat"><div class="k">Работает</div><div class="v" id="sUptime">—</div></div>
-        <div class="stat"><div class="k">Задач / заметок</div><div class="v" id="sCounters">—</div></div>
-        <div class="stat"><div class="k">Права</div><div class="v" id="sAdmin">—</div></div>
       </div>
       <div class="row" style="margin-top:11px">
         <button class="btn" id="pauseBtn">Пауза</button>
@@ -340,11 +349,7 @@
     $("sTunnel").title = next.tunnel_url || "туннель ещё не поднялся";
     $("sTunnel").style.color = next.tunnel_url ? "var(--green)" : "var(--red)";
     $("sPort").textContent = next.port ? `127.0.0.1:${next.port}` : "—";
-    $("sHost").textContent = next.hostname || "—";
     $("sUptime").textContent = formatUptime(next.uptime_seconds);
-    $("sCounters").textContent = `${next.commands || 0} / ${next.notes || 0}`;
-    $("sAdmin").textContent = next.elevated_hint ? "администратор" : "пользователь";
-    $("sAdmin").style.color = next.elevated_hint ? "var(--amber)" : "var(--muted)";
 
     $("agentDot").className = "dot " + (next.active ? "on" : "off");
     $("agentLabel").textContent = next.active ? "агент активен" : "пауза";
@@ -379,13 +384,21 @@
     relay: "≈",
   };
 
+  // Entries are capped so a runaway command cannot wreck the panel layout.
+  const ENTRY_CHARS = 1200;
+  const ENTRY_LONG = 110;
+
   function entryHtml(entry) {
     const clock = String(entry.time || "").slice(11); // HH:MM:SS
     const glyph = GLYPH[entry.kind] || "·";
-    return `<div class="entry ${escapeHtml(entry.kind)}">
+    let text = String(entry.text ?? "");
+    if (text.length > ENTRY_CHARS) text = text.slice(0, ENTRY_CHARS) + " …";
+    const classes = ["entry", entry.kind];
+    if (text.length > ENTRY_LONG || text.includes("\n")) classes.push("long");
+    return `<div class="${classes.map(escapeHtml).join(" ")}" title="${escapeHtml(text)}">
       <span class="t">${escapeHtml(clock)}</span>
       <span class="g">${escapeHtml(glyph)}</span>
-      <span class="m">${escapeHtml(entry.text)}</span>
+      <span class="m">${escapeHtml(text)}</span>
     </div>`;
   }
 
