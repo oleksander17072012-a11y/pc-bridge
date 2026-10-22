@@ -7,6 +7,7 @@ use crate::b64;
 use crate::journal::Entry;
 use crate::paths;
 use crate::prompt;
+use crate::splash;
 use crate::state::AppState;
 use crate::winapi::{self, WindowInfo};
 
@@ -38,6 +39,13 @@ pub fn rotate_key(state: Shared<'_>) -> String {
 #[tauri::command]
 pub fn pairing_bundle(state: Shared<'_>) -> String {
     format!("{}\n\n---\n\n{}", state.pairing_block(), prompt::PAIRING_PROMPT)
+}
+
+/// Called by the renderer once the splash has finished: grows the window to the
+/// launcher size and returns when the animation is over, so the UI can fade in.
+#[tauri::command]
+pub async fn expand_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    splash::expand(&window)
 }
 
 /// Native window move: the title bar starts the system drag loop, so the window

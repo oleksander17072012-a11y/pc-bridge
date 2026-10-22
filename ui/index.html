@@ -48,16 +48,9 @@
     flex: 1; align-self: stretch; display: flex; align-items: center; gap: 16px;
     min-width: 0; cursor: default; -webkit-app-region: no-drag;
   }
-  .tb-status { display: flex; align-items: center; gap: 16px; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); transition: background .2s, box-shadow .2s; }
-  .dot.on { background: var(--green); box-shadow: 0 0 9px var(--green); }
-  .dot.off { background: var(--red); box-shadow: 0 0 9px var(--red); }
-  .dot.wait { background: var(--amber); box-shadow: 0 0 9px var(--amber); }
-
   .tb-btn {
-    width: 36px; height: 28px; border-radius: 8px; margin-left: 4px; display: grid; place-items: center;
-    color: #a8a8b8; font-size: 13px; line-height: 1;
+    width: 46px; height: 32px; border-radius: 9px; margin-left: 6px; display: grid; place-items: center;
+    color: #a8a8b8; font-size: 17px; line-height: 1;
     transition: background .12s, color .12s, box-shadow .12s;
   }
   .tb-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
@@ -109,6 +102,7 @@
   .btn.danger { border-color: rgba(248,113,113,.28); color: #ffb4b4; background: rgba(248,113,113,.07); }
   .btn.danger:hover { background: rgba(248,113,113,.14); }
 
+  .tiles-row { margin-top: 22px; }
   .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 9px; }
   @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .stat { background: rgba(6,6,9,.55); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; min-width: 0; }
@@ -168,13 +162,39 @@
   .entry.agent .g { color: #a3e635; }
   .entry.relay .g { color: #7dd3fc; }
 
-  .stage-chip { max-width: 320px; color: #9db4ff; }
-  .stage-chip .stage-mark { color: var(--accent); }
-  .stage-chip span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .shot-wrap { margin-top: 11px; display: none; }
   .shot-wrap.show { display: block; }
   .shot-wrap img { width: 100%; border-radius: 10px; border: 1px solid var(--line); }
+
+  /* ---------- startup splash ---------- */
+  .splash {
+    position: fixed; inset: 0; z-index: 40;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    background: linear-gradient(180deg, #101014 0%, #0a0a0e 100%);
+    border-radius: var(--radius);
+    transition: opacity .3s ease;
+  }
+  .splash.gone { opacity: 0; pointer-events: none; }
+  .splash-spinner {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.09); border-top-color: var(--accent);
+    animation: splash-spin .8s linear infinite;
+  }
+  @keyframes splash-spin { to { transform: rotate(360deg); } }
+  .splash-label { font-size: 12px; color: var(--muted); letter-spacing: .2px; }
+  .splash-track {
+    width: 128px; height: 2px; border-radius: 2px;
+    background: rgba(255,255,255,.08); overflow: hidden;
+  }
+  .splash-bar {
+    width: 42%; height: 100%; border-radius: 2px; background: var(--accent);
+    animation: splash-slide 1.15s ease-in-out infinite;
+  }
+  @keyframes splash-slide {
+    0% { transform: translateX(-130%); }
+    100% { transform: translateX(340%); }
+  }
 
   .toast {
     position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 16px);
@@ -191,11 +211,7 @@
 <div class="app-shell">
   <div class="titlebar">
     <div class="drag" id="dragZone">
-      <div class="tb-status">
-        <span class="chip"><span class="dot wait" id="agentDot"></span><span id="agentLabel">запуск…</span></span>
-        <span class="chip"><span class="dot wait" id="tunnelDot"></span><span id="tunnelLabel">туннель…</span></span>
-        <span class="chip stage-chip" id="stageChip" hidden><span class="stage-mark">▸</span><span id="stageLabel"></span></span>
-      </div>
+
     </div>
     <button class="tb-btn min" id="tbMin" title="Свернуть">─</button>
     <button class="tb-btn close" id="tbClose" title="Свернуть в трей">✕</button>
@@ -221,7 +237,7 @@
         <div class="stat"><div class="k">Локальный релей</div><div class="v mono" id="sPort">—</div></div>
         <div class="stat"><div class="k">Работает</div><div class="v" id="sUptime">—</div></div>
       </div>
-      <div class="row" style="margin-top:16px">
+      <div class="row tiles-row">
         <button class="btn" id="pauseBtn">Пауза</button>
         <button class="btn" id="shotBtn">Скриншот</button>
         <button class="btn ghost" id="folderBtn">Папка данных</button>
@@ -232,10 +248,15 @@
     </section>
 
     <section class="card journal-card">
-      <h2>Журнал действий</h2>
+      <h2>Логги</h2>
       <div class="journal" id="journal"></div>
     </section>
   </div>
+</div>
+<div class="splash" id="splash">
+  <div class="splash-spinner"></div>
+  <div class="splash-label" id="splashLabel">запускаю мост…</div>
+  <div class="splash-track"><div class="splash-bar"></div></div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -296,6 +317,39 @@
     const frame = box.offsetHeight - box.clientHeight;
     box.style.height = "auto";
     box.style.height = box.scrollHeight + frame + 1 + "px";
+  }
+
+  // ---------------------------------------------------------------- splash
+  // The window opens small and grows into the launcher once the bridge is usable.
+  const SPLASH_MIN_MS = 1100;   // long enough for the growth to be visible
+  const SPLASH_MAX_MS = 15000;  // expand anyway if the tunnel is slow to appear
+  const splashOpenedAt = Date.now();
+  let splashFinishing = false;
+  let splashFinished = false;
+
+  function splashSay(text) {
+    if (splashFinished) return;
+    const label = $("splashLabel");
+    if (label && label.textContent !== text) label.textContent = text;
+  }
+
+  async function finishSplash() {
+    if (splashFinishing || splashFinished) return;
+    splashFinishing = true;
+    splashSay("готово");
+
+    const remaining = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashOpenedAt));
+    if (remaining) await new Promise((resolve) => setTimeout(resolve, remaining));
+
+    try {
+      await invoke("expand_window");
+    } catch (error) { /* the window is already expanded or we are not in Tauri */ }
+
+    splashFinished = true;
+    const splash = $("splash");
+    splash.classList.add("gone");
+    setTimeout(() => splash.remove(), 400);
+    refreshState();
   }
 
   function pairingView() {
@@ -360,6 +414,17 @@
     fitPairing();
     $("revealBtn").textContent = keyVisible ? "Скрыть ключ" : "Показать ключ";
 
+    if (!splashFinished) {
+      if (next.tunnel_url) {
+        splashSay("туннель готов, открываю мост");
+        finishSplash();
+      } else if (next.port) {
+        splashSay("подключаюсь к туннелю…");
+      } else {
+        splashSay("проверяю релей…");
+      }
+    }
+
     const tunnelHost = (next.tunnel_url || "").replace(/^https?:\/\//, "");
     $("sTunnel").textContent = tunnelHost || "нет связи";
     $("sTunnel").title = next.tunnel_url || "туннель ещё не поднялся";
@@ -367,21 +432,7 @@
     $("sPort").textContent = next.port ? `127.0.0.1:${next.port}` : "—";
     $("sUptime").textContent = formatUptime(next.uptime_seconds);
 
-    $("agentDot").className = "dot " + (next.active ? "on" : "off");
-    $("agentLabel").textContent = next.active ? "агент активен" : "пауза";
     $("pauseBtn").textContent = next.active ? "Пауза" : "Продолжить";
-
-    const chip = $("stageChip");
-    if (next.stage) {
-      chip.hidden = false;
-      $("stageLabel").textContent = next.stage;
-      chip.title = next.stage;
-    } else {
-      chip.hidden = true;
-    }
-
-    $("tunnelDot").className = "dot " + (next.tunnel_url ? "on" : "wait");
-    $("tunnelLabel").textContent = next.tunnel_url ? "туннель готов" : "поднимаю туннель";
   }
 
   const GLYPH = {
@@ -465,6 +516,9 @@
   $("quitBtn").addEventListener("click", () => {
     if (confirm("Закрыть PC-Bridge полностью? Мост перестанет работать.")) invoke("quit");
   });
+
+  // Never sit on the splash screen forever if the tunnel cannot be reached.
+  setTimeout(finishSplash, SPLASH_MAX_MS);
 
   window.addEventListener("resize", fitPairing);
   fitPairing();

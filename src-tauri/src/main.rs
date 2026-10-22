@@ -12,6 +12,7 @@ mod prompt;
 mod relay;
 mod shape;
 mod shell;
+mod splash;
 mod state;
 mod tunnel;
 mod ui_guard;
@@ -105,13 +106,7 @@ fn main() {
                 .menu(&menu)
                 .tooltip("PC-Bridge — мост к вашему ПК")
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_focus();
-                        }
-                    }
+                    "show" => splash::restore(app),
                     "quit" => app.exit(0),
                     _ => {}
                 });
@@ -135,6 +130,7 @@ fn main() {
             commands::close_window,
             commands::screenshot,
             commands::pairing_bundle,
+            commands::expand_window,
             commands::begin_drag,
             commands::open_data_dir,
             commands::quit,

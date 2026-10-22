@@ -36,3 +36,16 @@ pub fn apply(window: &WebviewWindow) {
     let radius = (CORNER_RADIUS * scale).round().max(1.0) as i32;
     winapi::set_round_region(hwnd, size.width as i32, size.height as i32, radius);
 }
+
+/// Drops the rounded region, leaving a plain rectangle.
+///
+/// Used while the window is being animated between sizes: the region is cut for one
+/// particular geometry, so keeping it during the animation would clip the window.
+pub fn clear(window: &WebviewWindow) {
+    let Ok(handle) = window.hwnd() else { return };
+    let hwnd = handle.0 as isize;
+    if hwnd == 0 {
+        return;
+    }
+    winapi::clear_region(hwnd);
+}

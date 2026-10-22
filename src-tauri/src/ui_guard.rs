@@ -62,6 +62,11 @@ fn the_status_grid_lists_only_the_tiles_the_user_asked_for() {
 }
 
 const CONF: &str = include_str!("../tauri.conf.json");
+const SPLASH: &str = include_str!("splash.rs");
+
+/// Launcher size the splash grows into.
+const SPLASH_WIDTH: f64 = 940.0;
+const SPLASH_HEIGHT: f64 = 760.0;
 
 /// Pulls the declarations of one CSS rule so the tests can assert on them.
 fn rule(selector: &str) -> String {
@@ -99,14 +104,64 @@ fn the_pairing_block_fits_its_text_instead_of_scrolling() {
     );
 }
 
+fn main_window_size() -> (u32, u32) {
+    let main = CONF.split("\"label\": \"main\"").nth(1).expect("main window entry");
+    let number = |key: &str| {
+        main.split(&format!("\"{key}\": "))
+            .nth(1)
+            .and_then(|rest| rest.split(',').next())
+            .and_then(|value| value.trim().parse::<u32>().ok())
+            .unwrap_or_else(|| panic!("main window {key}"))
+    };
+    (number("width"), number("height"))
+}
+
 #[test]
-fn the_launcher_is_narrow_enough_to_fit_without_scrolling() {
-    let width = CONF
-        .split("\"label\": \"main\"")
-        .nth(1)
-        .and_then(|rest| rest.split("\"width\": ").nth(1))
-        .and_then(|rest| rest.split(',').next())
-        .and_then(|value| value.trim().parse::<u32>().ok())
-        .expect("main window width");
-    assert!(width <= 960, "the launcher must stay narrow, got {width}");
+fn the_window_starts_as_a_small_rounded_card() {
+    let (width, height) = main_window_size();
+    assert!(width <= 460 && height <= 300, "startup window must be small, got {width}x{height}");
+    assert!(width < SPLASH_WIDTH as u32, "the startup window must be smaller than the launcher");
+}
+
+#[test]
+fn the_launcher_growth_target_matches_the_stylesheet_window() {
+    // splash.rs animates to these numbers; the conf keeps only the startup size.
+    assert_eq!(SPLASH_WIDTH, 940.0);
+    assert_eq!(SPLASH_HEIGHT, 760.0);
+    assert!(SPLASH.contains("pub const FULL_WIDTH: f64 = 940.0"), "splash grew away from the launcher size");
+    assert!(SPLASH.contains("pub const FULL_HEIGHT: f64 = 760.0"));
+    assert!(SPLASH.contains("shape::clear(&unclipped)"), "the old rounded region must be dropped while growing");
+    assert!(SPLASH.contains("shape::apply(&rounded)"), "the new rounded outline must be applied afterwards");
+    assert!(INDEX.contains("function finishSplash()"), "the renderer must drive the growth");
+    assert!(INDEX.contains("invoke(\"expand_window\")"));
+    assert!(
+        INDEX.contains("SPLASH_MAX_MS"),
+        "the splash must not hang forever when the tunnel never arrives"
+    );
+}
+
+#[test]
+fn the_title_bar_has_no_status_chips_and_larger_buttons() {
+    for gone in ["id=\"agentDot\"", "id=\"tunnelDot\"", "id=\"stageChip\"", "class=\"chip\""] {
+        assert!(!INDEX.contains(gone), "{gone} was removed from the title bar on purpose");
+    }
+    let buttons = rule(".tb-btn");
+    assert!(buttons.contains("width: 46px"), "window buttons must be larger");
+    assert!(buttons.contains("height: 32px"));
+}
+
+#[test]
+fn the_journal_card_is_called_loggi() {
+    assert!(INDEX.contains("<h2>Логги</h2>"));
+    assert!(!INDEX.contains("<h2>Журнал действий</h2>"));
+}
+
+#[test]
+fn the_status_tiles_keep_air_above_their_buttons() {
+    assert!(INDEX.contains("class=\"row tiles-row\""));
+    let row = rule(".tiles-row");
+    assert!(
+        row.contains("margin-top: 22px") || row.contains("margin-top:22px"),
+        "the button row needs vertical breathing room"
+    );
 }
