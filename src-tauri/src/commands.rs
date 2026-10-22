@@ -4,7 +4,6 @@ use serde_json::Value;
 use tauri::State;
 
 use crate::b64;
-use crate::chat;
 use crate::journal::Entry;
 use crate::paths;
 use crate::prompt;
@@ -41,22 +40,6 @@ pub fn pairing_bundle(state: Shared<'_>) -> String {
     format!("{}\n\n---\n\n{}", state.pairing_block(), prompt::PAIRING_PROMPT)
 }
 
-/// Opens (or focuses) the in-app chat next to the launcher and stretches the window.
-#[tauri::command]
-pub fn open_chat(state: Shared<'_>, window: tauri::WebviewWindow) -> Result<(), String> {
-    chat::open(&state.app, &window)?;
-    state.journal.push(&state.app, "ui", "чат открыт в отдельном окне приложения");
-    Ok(())
-}
-
-/// Opens the chat in the default browser, tiled to the right half of the screen.
-#[tauri::command]
-pub fn open_chat_browser(state: Shared<'_>, window: tauri::WebviewWindow) -> Result<(), String> {
-    chat::open_in_browser(&state.app, &window)?;
-    state.journal.push(&state.app, "ui", "чат открыт в браузере рядом с лаунчером");
-    Ok(())
-}
-
 /// Native window move: the title bar starts the system drag loop, so the window
 /// follows the pointer even though it has no decorations.
 #[tauri::command]
@@ -65,16 +48,6 @@ pub fn begin_drag(window: tauri::WebviewWindow) {
     let hwnd = handle.0 as isize;
     let clone = window.clone();
     let _ = clone.run_on_main_thread(move || winapi::begin_window_drag(hwnd));
-}
-
-#[tauri::command]
-pub fn close_chat(state: Shared<'_>) {
-    chat::close(&state.app);
-}
-
-#[tauri::command]
-pub fn chat_is_open(state: Shared<'_>) -> bool {
-    chat::is_open(&state.app)
 }
 
 #[tauri::command]

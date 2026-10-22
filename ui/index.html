@@ -191,8 +191,6 @@
       <textarea id="pairing" readonly spellcheck="false"></textarea>
       <div class="row" style="margin-top:10px">
         <button class="btn primary" id="copyBtn">Копировать ключ + промпт</button>
-        <button class="btn" id="chatBtn">Открыть чат</button>
-        <button class="btn ghost" id="chatBrowserBtn" title="Если в окне приложения белая страница — откройте чат в браузере">Чат в браузере</button>
         <button class="btn" id="copyKeyBtn">Ключ</button>
         <button class="btn ghost" id="revealBtn">Показать ключ</button>
         <button class="btn ghost" id="rotateBtn">Новый ключ</button>
@@ -302,49 +300,11 @@
   $("copyBtn").addEventListener("click", async () => {
     try {
       const bundle = await invoke("pairing_bundle");
-      await copyText(bundle, "Скопировано: ключ + промпт. Открываю чат…");
+      await copyText(bundle, "Скопировано: ключ + промпт — вставьте в чат");
     } catch (error) {
       await copyText(state?.pairing || "", "Скопирован только ключ");
     }
-    try {
-      await invoke("open_chat");
-      refreshChatButton();
-    } catch (error) {
-      toast("Не удалось открыть окно чата: " + error);
-    }
   });
-
-  $("chatBtn").addEventListener("click", async () => {
-    try {
-      const open = await invoke("chat_is_open");
-      if (open) {
-        await invoke("close_chat");
-        toast("Окно чата закрыто");
-      } else {
-        await invoke("open_chat");
-        toast("Чат открыт справа — войдите в аккаунт");
-      }
-      refreshChatButton();
-    } catch (error) {
-      toast(String(error));
-    }
-  });
-
-  $("chatBrowserBtn").addEventListener("click", async () => {
-    try {
-      await invoke("open_chat_browser");
-      toast("Чат открыт в браузере справа");
-    } catch (error) {
-      toast("Не удалось открыть браузер: " + error);
-    }
-  });
-
-  async function refreshChatButton() {
-    try {
-      const open = await invoke("chat_is_open");
-      $("chatBtn").textContent = open ? "Закрыть чат" : "Открыть чат";
-    } catch (error) { /* ignore */ }
-  }
 
   $("copyKeyBtn").addEventListener("click", () =>
     copyText(state?.pairing || "", "Скопирован только блок ключа"));
@@ -480,11 +440,9 @@
   listen("journal", (event) => appendEntry(event.payload));
   listen("state", (event) => renderState(event.payload));
   listen("tunnel", () => refreshState());
-  window.addEventListener("focus", refreshChatButton);
 
   refreshState();
   loadJournal();
-  refreshChatButton();
   setInterval(refreshState, 3000);
 
   // Watchdog: a crashed or half-painted renderer leaves a stale frame. If the bridge
