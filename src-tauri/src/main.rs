@@ -136,6 +136,8 @@ fn main() {
             commands::screenshot,
             commands::pairing_bundle,
             commands::open_chat,
+            commands::open_chat_browser,
+            commands::begin_drag,
             commands::close_chat,
             commands::chat_is_open,
             commands::open_data_dir,

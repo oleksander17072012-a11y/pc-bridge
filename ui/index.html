@@ -192,6 +192,7 @@
       <div class="row" style="margin-top:10px">
         <button class="btn primary" id="copyBtn">Копировать ключ + промпт</button>
         <button class="btn" id="chatBtn">Открыть чат</button>
+        <button class="btn ghost" id="chatBrowserBtn" title="Если в окне приложения белая страница — откройте чат в браузере">Чат в браузере</button>
         <button class="btn" id="copyKeyBtn">Ключ</button>
         <button class="btn ghost" id="revealBtn">Показать ключ</button>
         <button class="btn ghost" id="rotateBtn">Новый ключ</button>
@@ -268,8 +269,8 @@
   $("dragZone").addEventListener("mousedown", (event) => {
     if (event.button !== 0) return;
     dragging = true;
-    appWindow.startDragging();
-    setTimeout(() => { dragging = false; }, 400);
+    invoke("begin_drag").catch(() => appWindow.startDragging());
+    setTimeout(() => { dragging = false; }, 500);
   });
 
   $("tbMin").addEventListener("click", () => appWindow.minimize());
@@ -326,6 +327,15 @@
       refreshChatButton();
     } catch (error) {
       toast(String(error));
+    }
+  });
+
+  $("chatBrowserBtn").addEventListener("click", async () => {
+    try {
+      await invoke("open_chat_browser");
+      toast("Чат открыт в браузере справа");
+    } catch (error) {
+      toast("Не удалось открыть браузер: " + error);
     }
   });
 

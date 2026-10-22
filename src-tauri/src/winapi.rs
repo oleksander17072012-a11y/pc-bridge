@@ -128,6 +128,8 @@ extern "system" {
     fn GetKeyState(vk: i32) -> i16;
     fn MessageBeep(kind: u32) -> i32;
     fn SetWindowRgn(hwnd: isize, region: isize, redraw: i32) -> i32;
+    fn ReleaseCapture() -> i32;
+    fn SendMessageW(hwnd: isize, message: u32, wparam: usize, lparam: isize) -> isize;
 }
 
 #[link(name = "gdi32")]
@@ -683,5 +685,22 @@ pub fn set_round_region(hwnd: isize, width: i32, height: i32, radius: i32) {
 pub fn clear_region(hwnd: isize) {
     unsafe {
         SetWindowRgn(hwnd, 0, 1);
+    }
+}
+
+const WM_NCLBUTTONDOWN: u32 = 0x00A1;
+const HTCAPTION: usize = 2;
+
+/// Starts a native window move exactly like a title bar would.
+///
+/// This must run on the thread that owns the window: `SendMessage` then enters the
+/// system move loop, so the window follows the pointer without any JavaScript involved.
+pub fn begin_window_drag(hwnd: isize) {
+    if hwnd == 0 {
+        return;
+    }
+    unsafe {
+        ReleaseCapture();
+        SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
     }
 }
