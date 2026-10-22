@@ -70,7 +70,7 @@
   .tb-btn.close:hover { background: rgba(248, 113, 113, .18); color: #ffb4b4; box-shadow: inset 0 0 0 1px rgba(248,113,113,.4); }
 
   /* ---------- content ---------- */
-  .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .content { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
 
   .card {
     flex: 0 0 auto; min-height: 0;
@@ -84,11 +84,11 @@
   .card h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: #5d5d6b; font-size: 11px; }
 
   textarea {
-    width: 100%; min-height: 92px; resize: none; padding: 11px 13px;
+    width: 100%; min-height: 0; resize: none; padding: 11px 13px;
     border-radius: 11px; border: 1px solid var(--line); background: rgba(5,5,8,.65);
     color: var(--text); font: 12.5px/1.6 "Cascadia Mono", "Consolas", monospace;
-    outline: none; word-break: break-all;
-    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.14) transparent;
+    outline: none; overflow: hidden; word-break: break-all; white-space: pre-wrap;
+    /* Height is fitted to the content in JS, so the block never scrolls. */
   }
   /* WebView2 paints the resize corner and the scrollbar junction white otherwise. */
   ::-webkit-scrollbar-corner { background: transparent; }
@@ -117,10 +117,14 @@
   .stat .v.clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mono { font-family: "Cascadia Mono", "Consolas", monospace; font-size: 12px; }
 
+  .card.journal-card { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 150px; }
+  /* The journal is the only scroller in the window; everything above it fits. */
   .journal {
-    display: flex; flex-direction: column; gap: 1px; height: 268px; max-height: 268px; min-height: 0;
+    flex: 1 1 auto; display: flex; flex-direction: column; gap: 1px;
+    height: auto; max-height: none; min-height: 0;
     overflow-y: auto; overflow-x: hidden; contain: content;
     font-family: "Cascadia Mono", "Consolas", monospace;
+    padding-right: 2px;
   }
   .entry {
     display: flex; align-items: baseline; gap: 9px; flex: 0 0 auto;
@@ -217,7 +221,7 @@
         <div class="stat"><div class="k">Локальный релей</div><div class="v mono" id="sPort">—</div></div>
         <div class="stat"><div class="k">Работает</div><div class="v" id="sUptime">—</div></div>
       </div>
-      <div class="row" style="margin-top:11px">
+      <div class="row" style="margin-top:16px">
         <button class="btn" id="pauseBtn">Пауза</button>
         <button class="btn" id="shotBtn">Скриншот</button>
         <button class="btn ghost" id="folderBtn">Папка данных</button>
@@ -227,7 +231,7 @@
       <div class="shot-wrap" id="shotWrap"><img id="shotImg" alt="скриншот экрана" /></div>
     </section>
 
-    <section class="card">
+    <section class="card journal-card">
       <h2>Журнал действий</h2>
       <div class="journal" id="journal"></div>
     </section>
@@ -284,6 +288,16 @@
   $("tbClose").addEventListener("click", () => appWindow.close());
 
   // ---------------------------------------------------------------- pairing
+  // The pairing block must never scroll: it grows to fit the text instead.
+  function fitPairing() {
+    const box = $("pairing");
+    // scrollHeight covers the content only; padding and border are added back so the last
+    // line is not clipped by a pixel or two (which brings the scrollbar back).
+    const frame = box.offsetHeight - box.clientHeight;
+    box.style.height = "auto";
+    box.style.height = box.scrollHeight + frame + 1 + "px";
+  }
+
   function pairingView() {
     const block = state?.pairing || "";
     if (!block || keyVisible) return block;
@@ -321,6 +335,7 @@
   $("revealBtn").addEventListener("click", () => {
     keyVisible = !keyVisible;
     $("pairing").value = pairingView();
+    fitPairing();
     $("revealBtn").textContent = keyVisible ? "Скрыть ключ" : "Показать ключ";
   });
 
@@ -342,6 +357,7 @@
     if (!next) return;
     state = next;
     $("pairing").value = pairingView();
+    fitPairing();
     $("revealBtn").textContent = keyVisible ? "Скрыть ключ" : "Показать ключ";
 
     const tunnelHost = (next.tunnel_url || "").replace(/^https?:\/\//, "");
@@ -449,6 +465,9 @@
   $("quitBtn").addEventListener("click", () => {
     if (confirm("Закрыть PC-Bridge полностью? Мост перестанет работать.")) invoke("quit");
   });
+
+  window.addEventListener("resize", fitPairing);
+  fitPairing();
 
   listen("journal", (event) => appendEntry(event.payload));
   listen("state", (event) => renderState(event.payload));

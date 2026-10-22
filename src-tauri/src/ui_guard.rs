@@ -60,3 +60,53 @@ fn the_status_grid_lists_only_the_tiles_the_user_asked_for() {
         assert!(INDEX.contains(id), "status tile {id} is missing");
     }
 }
+
+const CONF: &str = include_str!("../tauri.conf.json");
+
+/// Pulls the declarations of one CSS rule so the tests can assert on them.
+fn rule(selector: &str) -> String {
+    let start = INDEX
+        .find(&format!("\n  {selector} {{"))
+        .unwrap_or_else(|| panic!("no CSS rule for {selector}"));
+    let rest = &INDEX[start..];
+    let end = rest.find('}').expect("unterminated CSS rule");
+    rest[..end].to_string()
+}
+
+#[test]
+fn only_the_journal_scrolls() {
+    // The window used to scroll as a whole, and the pairing block had its own scrollbar
+    // on top of that. Now the journal is the single scroller.
+    let content = rule(".content");
+    assert!(content.contains("overflow: hidden"), "the main column must not scroll");
+
+    let journal = rule(".journal");
+    assert!(journal.contains("overflow-y: auto"), "the journal must scroll on its own");
+}
+
+#[test]
+fn the_pairing_block_fits_its_text_instead_of_scrolling() {
+    let textarea = rule("textarea");
+    assert!(textarea.contains("overflow: hidden"), "the pairing block must not scroll");
+    assert!(textarea.contains("resize: none"));
+
+    // Height is fitted in JS after every update, otherwise the box clips the last line.
+    assert!(INDEX.contains("function fitPairing()"));
+    assert_eq!(
+        INDEX.matches("fitPairing();").count(),
+        3,
+        "fitPairing must run on key toggle, on state refresh and on resize"
+    );
+}
+
+#[test]
+fn the_launcher_is_narrow_enough_to_fit_without_scrolling() {
+    let width = CONF
+        .split("\"label\": \"main\"")
+        .nth(1)
+        .and_then(|rest| rest.split("\"width\": ").nth(1))
+        .and_then(|rest| rest.split(',').next())
+        .and_then(|value| value.trim().parse::<u32>().ok())
+        .expect("main window width");
+    assert!(width <= 960, "the launcher must stay narrow, got {width}");
+}
