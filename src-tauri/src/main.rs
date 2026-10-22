@@ -4,6 +4,7 @@
 compile_error!("PC-Bridge is a Windows application: it relies on user32/gdi32 for window enumeration, background input and screen capture.");
 
 mod b64;
+mod chat;
 mod commands;
 mod input;
 mod journal;
@@ -134,6 +135,9 @@ fn main() {
             commands::close_window,
             commands::screenshot,
             commands::pairing_bundle,
+            commands::open_chat,
+            commands::close_chat,
+            commands::chat_is_open,
             commands::open_data_dir,
             commands::quit,
         ])

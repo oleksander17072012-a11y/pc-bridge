@@ -4,6 +4,7 @@ use serde_json::Value;
 use tauri::State;
 
 use crate::b64;
+use crate::chat;
 use crate::journal::Entry;
 use crate::paths;
 use crate::prompt;
@@ -38,6 +39,24 @@ pub fn rotate_key(state: Shared<'_>) -> String {
 #[tauri::command]
 pub fn pairing_bundle(state: Shared<'_>) -> String {
     format!("{}\n\n---\n\n{}", state.pairing_block(), prompt::PAIRING_PROMPT)
+}
+
+/// Opens (or focuses) the Arena chat next to the launcher and stretches the window.
+#[tauri::command]
+pub fn open_chat(state: Shared<'_>, window: tauri::WebviewWindow) -> Result<(), String> {
+    chat::open(&state.app, &window)?;
+    state.journal.push(&state.app, "ui", "открыт чат рядом с лаунчером");
+    Ok(())
+}
+
+#[tauri::command]
+pub fn close_chat(state: Shared<'_>) {
+    chat::close(&state.app);
+}
+
+#[tauri::command]
+pub fn chat_is_open(state: Shared<'_>) -> bool {
+    chat::is_open(&state.app)
 }
 
 #[tauri::command]
