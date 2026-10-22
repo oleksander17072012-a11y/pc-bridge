@@ -130,7 +130,6 @@ fn the_launcher_growth_target_matches_the_stylesheet_window() {
     assert_eq!(SPLASH_HEIGHT, 760.0);
     assert!(SPLASH.contains("pub const FULL_WIDTH: f64 = 940.0"), "splash grew away from the launcher size");
     assert!(SPLASH.contains("pub const FULL_HEIGHT: f64 = 760.0"));
-    assert!(SPLASH.contains("shape::clear(&unclipped)"), "the old rounded region must be dropped while growing");
     assert!(SPLASH.contains("shape::apply(&rounded)"), "the new rounded outline must be applied afterwards");
     assert!(INDEX.contains("function finishSplash()"), "the renderer must drive the growth");
     assert!(INDEX.contains("invoke(\"expand_window\")"));
@@ -164,4 +163,35 @@ fn the_status_tiles_keep_air_above_their_buttons() {
         row.contains("margin-top: 22px") || row.contains("margin-top:22px"),
         "the button row needs vertical breathing room"
     );
+}
+
+#[test]
+fn the_growth_animation_is_smooth_by_construction() {
+    // One native call per frame: move + resize + re-round at once.
+    assert!(
+        SPLASH.contains("winapi::set_rect_rounded(hwnd, x, y, width, height, radius)"),
+        "each frame must move, resize and re-round in a single call"
+    );
+    // Paced: the next frame waits until the previous one has been applied.
+    assert!(SPLASH.contains("recv_timeout(FRAME_TIMEOUT)"), "frames must be paced by rendezvous");
+    // Fast: a fixed, short budget instead of a frame count.
+    assert!(SPLASH.contains("Duration::from_millis(340)"));
+    // Centred on the monitor the window is on, not on the primary screen.
+    assert!(SPLASH.contains("current_monitor()"));
+    assert!(SPLASH.contains("origin_x + (screen_width - target_width) / 2"));
+    // Corners stay rounded while it grows.
+    assert!(
+        !SPLASH.contains("shape::clear"),
+        "clearing the region during growth is what made the corners square"
+    );
+}
+
+#[test]
+fn the_startup_card_is_rounded_before_it_is_shown() {
+    // hidden window -> rounded -> shown by the renderer once it has painted
+    assert!(CONF.contains("\"visible\": false"), "the main window must start hidden");
+    assert!(INDEX.contains("invoke(\"show_window\")"), "the renderer must reveal the window");
+    let main = include_str!("main.rs");
+    assert!(main.contains("shape::apply(&main)"), "rounding must happen before the first show");
+    assert!(main.contains("splash::round_now"), "the region must be re-applied after painting");
 }

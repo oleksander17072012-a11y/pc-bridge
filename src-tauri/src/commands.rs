@@ -41,6 +41,14 @@ pub fn pairing_bundle(state: Shared<'_>) -> String {
     format!("{}\n\n---\n\n{}", state.pairing_block(), prompt::PAIRING_PROMPT)
 }
 
+/// Shows the window once the renderer has painted the splash, so the first thing the
+/// user sees is the loading card and not an empty white window.
+#[tauri::command]
+pub fn show_window(window: tauri::WebviewWindow) {
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 /// Called by the renderer once the splash has finished: grows the window to the
 /// launcher size and returns when the animation is over, so the UI can fade in.
 #[tauri::command]

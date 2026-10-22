@@ -49,14 +49,31 @@ fn main() {
             // 2. Rounded outline (see shape.rs). No blur effects and no resize frame:
             //    DWM effects painted the full window rectangle (square corners, drag lag)
             //    and the thick frame drew a light outline along the edges.
+            //
+            //    The window is created hidden, so it can be rounded *before* it is shown:
+            //    otherwise the small startup card was square for the first second while
+            //    the webview was still painting.
             if let Some(main) = app.get_webview_window("main") {
-                // Give the window a moment to reach its final size, then clip it.
-                let target = main.clone();
+                shape::apply(&main);
+                // The window is created hidden and the renderer calls `show_window` once
+                // it has painted: showing a hidden WebView2 earlier gives a white flash.
+                // This timer is only a guard in case that call never arrives.
+                let fallback = main.clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(250));
-                    let clone = target.clone();
-                    let _ = target.run_on_main_thread(move || shape::apply(&clone));
+                    std::thread::sleep(std::time::Duration::from_millis(900));
+                    if !fallback.is_visible().unwrap_or(true) {
+                        let _ = fallback.show();
+                    }
                 });
+                // The first frames of the webview can reset the region; re-apply once
+                // the paint has settled, and again after the layout is final.
+                for delay in [140u64, 420] {
+                    let target = main.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(delay));
+                        splash::round_now(&target);
+                    });
+                }
             }
 
             // 3. The overlay cursor must never steal hit-testing from real windows.
@@ -130,6 +147,7 @@ fn main() {
             commands::close_window,
             commands::screenshot,
             commands::pairing_bundle,
+            commands::show_window,
             commands::expand_window,
             commands::begin_drag,
             commands::open_data_dir,

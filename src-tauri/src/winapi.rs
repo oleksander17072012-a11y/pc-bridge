@@ -128,6 +128,15 @@ extern "system" {
     fn GetKeyState(vk: i32) -> i16;
     fn MessageBeep(kind: u32) -> i32;
     fn SetWindowRgn(hwnd: isize, region: isize, redraw: i32) -> i32;
+    fn SetWindowPos(
+        hwnd: isize,
+        after: isize,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        flags: u32,
+    ) -> i32;
     fn ReleaseCapture() -> i32;
     fn SendMessageW(hwnd: isize, message: u32, wparam: usize, lparam: isize) -> isize;
 }
@@ -681,6 +690,30 @@ pub fn set_round_region(hwnd: isize, width: i32, height: i32, radius: i32) {
         }
     }
 }
+
+/// Moves, resizes and re-rounds in a single call.
+///
+/// Doing this in three separate messages makes the growth stutter: the window is
+/// repainted between the size change and the position change, and the stale rounded
+/// region clips the fresh rectangle for a frame. Everything at once, no activation,
+/// no z-order change, no copy-bits artifacts.
+pub fn set_rect_rounded(hwnd: isize, x: i32, y: i32, width: i32, height: i32, radius: i32) {
+    unsafe {
+        if radius > 0 {
+            let region = CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2);
+            if region != 0 {
+                SetWindowRgn(hwnd, region, 0);
+            }
+        }
+        // SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOREDRAW off:
+        // the window must repaint every frame, that is what makes the animation smooth.
+        SetWindowPos(hwnd, 0, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    }
+}
+
+const SWP_NOZORDER: u32 = 0x0004;
+const SWP_NOACTIVATE: u32 = 0x0010;
+const SWP_NOOWNERZORDER: u32 = 0x0200;
 
 pub fn clear_region(hwnd: isize) {
     unsafe {

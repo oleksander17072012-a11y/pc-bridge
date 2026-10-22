@@ -517,6 +517,11 @@
     if (confirm("Закрыть PC-Bridge полностью? Мост перестанет работать.")) invoke("quit");
   });
 
+  // The window is created hidden; reveal it once the splash has actually been painted.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    invoke("show_window").catch(() => {});
+  }));
+
   // Never sit on the splash screen forever if the tunnel cannot be reached.
   setTimeout(finishSplash, SPLASH_MAX_MS);
 
