@@ -104,7 +104,8 @@ fn there_is_a_cheap_latency_probe() {
 fn the_prompt_says_where_the_time_actually_goes() {
     // Compare case-insensitively: the rules are prose, not identifiers, and asserting on
     // exact capitalisation just breaks the build when the wording is improved.
-    let prompt = PROMPT.to_lowercase();
+    // The rules wrap across lines in the document, so collapse whitespace first.
+    let prompt = PROMPT.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ");
     for rule in [
         "do not follow it with a separate",
         "trust exit codes",
