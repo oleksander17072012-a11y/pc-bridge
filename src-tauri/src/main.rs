@@ -5,6 +5,7 @@ compile_error!("PC-Bridge is a Windows application: it relies on user32/gdi32 fo
 
 mod b64;
 mod commands;
+mod encoding;
 mod input;
 mod journal;
 mod paths;

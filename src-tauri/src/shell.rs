@@ -40,12 +40,14 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Duration) -> Outcome {
     let mut process = match shell {
         Some("powershell") | Some("pwsh") => {
             let mut command_line = Command::new("powershell");
-            command_line.args(["-NoProfile", "-NonInteractive", "-Command", command]);
+            let wrapped = crate::encoding::powershell_wrapper(command);
+            command_line.args(["-NoProfile", "-NonInteractive", "-Command", &wrapped]);
             command_line
         }
         _ => {
             let mut command_line = Command::new("cmd.exe");
-            command_line.args(["/c", command]);
+            let wrapped = crate::encoding::cmd_wrapper(command);
+            command_line.args(["/c", &wrapped]);
             command_line
         }
     };
@@ -73,8 +75,9 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Duration) -> Outcome {
 
     match receiver.recv_timeout(timeout) {
         Ok(Ok(output)) => {
-            let mut text = String::from_utf8_lossy(&output.stdout).to_string();
-            text.push_str(&String::from_utf8_lossy(&output.stderr));
+            // Never lossy: a Cyrillic path must survive the trip through the console.
+            let mut text = crate::encoding::decode(&output.stdout);
+            text.push_str(&crate::encoding::decode(&output.stderr));
             let text: String = text.chars().take(20_000).collect();
             Outcome { output: text, exit_code: output.status.code().unwrap_or(-1) }
         }

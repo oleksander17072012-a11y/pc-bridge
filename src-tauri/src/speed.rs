@@ -70,7 +70,14 @@ fn the_journal_appends_instead_of_rebuilding() {
 
 #[test]
 fn the_prompt_teaches_the_agent_to_waste_fewer_requests() {
-    for rule in ["Doing the work fast", "Group independent commands", "Screenshot deliberately", "Ask for state once"] {
+    for rule in [
+        "Doing the work fast",
+        "Group independent commands",
+        "Screenshot deliberately",
+        "Ask for state once",
+        "One request per task",
+        "Trust exit codes",
+    ] {
         assert!(PROMPT.contains(rule), "missing speed rule: {rule}");
     }
 }
@@ -98,4 +105,10 @@ fn the_prompt_says_where_the_time_actually_goes() {
     for rule in ["Do not follow it with a separate", "Trust exit codes", "the number of steps"] {
         assert!(PROMPT.contains(rule), "missing rule: {rule}");
     }
+}
+
+#[test]
+fn the_prompt_forbids_the_base64_workaround() {
+    assert!(PROMPT.contains("Base64 tricks are no longer needed"));
+    assert!(PROMPT.contains("do not do this any more"));
 }
