@@ -12,6 +12,7 @@ mod prompt;
 mod relay;
 mod shape;
 mod shell;
+mod speed;
 mod splash;
 mod state;
 mod tunnel;
@@ -91,7 +92,8 @@ fn main() {
                     let mut last_url: Option<String> = None;
                     loop {
                         std::thread::sleep(Duration::from_secs(3));
-                        let _ = worker.refresh_windows();
+                        // Windows are listed on demand (see AppState::windows_recent):
+                        // enumerating the whole desktop every few seconds was pure load.
                         let url = worker.tunnel.url();
                         if url != last_url {
                             last_url = url;

@@ -73,7 +73,7 @@ pub fn restart_tunnel(state: Shared<'_>) {
 
 #[tauri::command]
 pub fn refresh_windows(state: Shared<'_>) -> Vec<WindowInfo> {
-    state.refresh_windows()
+    state.windows_recent(std::time::Duration::from_millis(700))
 }
 
 #[tauri::command]
@@ -88,7 +88,7 @@ pub fn close_window(_state: Shared<'_>, hwnd: i64) -> bool {
 
 #[tauri::command]
 pub async fn screenshot(_state: Shared<'_>) -> Result<String, String> {
-    let shot = tokio::task::spawn_blocking(|| winapi::capture(1440))
+    let shot = tokio::task::spawn_blocking(|| winapi::capture(1440, 70))
         .await
         .map_err(|error| error.to_string())??;
     Ok(b64::encode(&shot.jpeg))

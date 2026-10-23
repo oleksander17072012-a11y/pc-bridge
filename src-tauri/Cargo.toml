@@ -1,6 +1,6 @@
 [package]
 name = "pc-bridge"
-version = "2.2.1"
+version = "2.3.0"
 description = "PC-Bridge — remote control bridge for your own Windows PC"
 authors = ["oleksander17072012-a11y"]
 edition = "2021"

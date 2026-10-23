@@ -60,6 +60,8 @@ const SM_CYSCREEN: i32 = 1;
 const SW_RESTORE: i32 = 9;
 const GA_ROOT: u32 = 2;
 const SRCCOPY: u32 = 0x00CC_0020;
+/// `SetStretchBltMode` value for a smooth downscale.
+const HALFTONE: i32 = 4;
 const DIB_RGB_COLORS: u32 = 0;
 const BI_RGB: u32 = 0;
 const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
@@ -147,6 +149,8 @@ extern "system" {
     fn CreateCompatibleBitmap(hdc: isize, width: i32, height: i32) -> isize;
     fn SelectObject(hdc: isize, object: isize) -> isize;
     fn BitBlt(dest: isize, x: i32, y: i32, width: i32, height: i32, src: isize, src_x: i32, src_y: i32, rop: u32) -> i32;
+    fn StretchBlt(dest: isize, x: i32, y: i32, width: i32, height: i32, src: isize, src_x: i32, src_y: i32, src_width: i32, src_height: i32, rop: u32) -> i32;
+    fn SetStretchBltMode(hdc: isize, mode: i32) -> i32;
     fn GetDIBits(hdc: isize, bitmap: isize, start: u32, lines: u32, bits: *mut u8, info: *mut BITMAPINFO, usage: u32) -> i32;
     fn DeleteObject(object: isize) -> i32;
     fn DeleteDC(hdc: isize) -> i32;
@@ -344,7 +348,14 @@ pub struct Shot {
 }
 
 /// Captures the primary screen with GDI and encodes it as JPEG.
-pub fn capture(max_width: u32) -> Result<Shot, String> {
+///
+/// `max_width` is the width the picture is scaled down to, `quality` is the JPEG
+/// quality (lower is both faster to encode and faster to upload through the tunnel).
+///
+/// The downscale happens in GDI (`StretchBlt`), not in RAM: a 3440x1440 desktop would
+/// otherwise cost a ~20 MB buffer plus a five-million-pixel colour conversion on every
+/// screenshot, which is the slowest thing this bridge does.
+pub fn capture(max_width: u32, quality: u8) -> Result<Shot, String> {
     unsafe {
         let width = GetSystemMetrics(SM_CXSCREEN);
         let height = GetSystemMetrics(SM_CYSCREEN);
@@ -355,14 +366,21 @@ pub fn capture(max_width: u32) -> Result<Shot, String> {
         if screen == 0 {
             return Err("GetDC вернул пустой контекст устройства".into());
         }
+        let target_width = max_width.max(320).min(width as u32) as i32;
+        let target_height = ((height as f64 * target_width as f64 / width as f64).round() as i32).max(1);
+
         let memory = CreateCompatibleDC(screen);
-        let bitmap = CreateCompatibleBitmap(screen, width, height);
+        let bitmap = CreateCompatibleBitmap(screen, target_width, target_height);
         if memory == 0 || bitmap == 0 {
             ReleaseDC(0, screen);
             return Err("не удалось создать совместимый контекст GDI".into());
         }
         let previous = SelectObject(memory, bitmap);
-        let copied = BitBlt(memory, 0, 0, width, height, screen, 0, 0, SRCCOPY);
+        // HALFTONE gives a clean downscale; cheap enough to stay under a few milliseconds.
+        SetStretchBltMode(memory, HALFTONE);
+        let copied = StretchBlt(
+            memory, 0, 0, target_width, target_height, screen, 0, 0, width, height, SRCCOPY,
+        );
         if copied == 0 {
             SelectObject(memory, previous);
             DeleteObject(bitmap);
@@ -374,8 +392,8 @@ pub fn capture(max_width: u32) -> Result<Shot, String> {
         let mut info = BITMAPINFO {
             bmi_header: BITMAPINFOHEADER {
                 bi_size: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-                bi_width: width,
-                bi_height: -height, // negative height => top-down rows
+                bi_width: target_width,
+                bi_height: -target_height, // negative height => top-down rows
                 bi_planes: 1,
                 bi_bit_count: 32,
                 bi_compression: BI_RGB,
@@ -388,12 +406,12 @@ pub fn capture(max_width: u32) -> Result<Shot, String> {
             bmi_colors: [0],
         };
 
-        let mut bgra = vec![0u8; (width as usize) * (height as usize) * 4];
+        let mut bgra = vec![0u8; (target_width as usize) * (target_height as usize) * 4];
         let lines = GetDIBits(
             memory,
             bitmap,
             0,
-            height as u32,
+            target_height as u32,
             bgra.as_mut_ptr(),
             &mut info,
             DIB_RGB_COLORS,
@@ -408,27 +426,22 @@ pub fn capture(max_width: u32) -> Result<Shot, String> {
             return Err("GetDIBits не вернул пиксели".into());
         }
 
-        let mut rgb = Vec::with_capacity((width as usize) * (height as usize) * 3);
-        for pixel in bgra.chunks_exact(4) {
-            rgb.push(pixel[2]);
-            rgb.push(pixel[1]);
-            rgb.push(pixel[0]);
+        let mut rgb = vec![0u8; (target_width as usize) * (target_height as usize) * 3];
+        for (pixel, out) in bgra.chunks_exact(4).zip(rgb.chunks_exact_mut(3)) {
+            out[0] = pixel[2];
+            out[1] = pixel[1];
+            out[2] = pixel[0];
         }
 
-        let image = image::RgbImage::from_raw(width as u32, height as u32, rgb)
+        let image = image::RgbImage::from_raw(target_width as u32, target_height as u32, rgb)
             .ok_or_else(|| "не удалось собрать изображение из пикселей".to_string())?;
-        let image = if image.width() > max_width.max(160) {
-            let ratio = max_width.max(160) as f64 / image.width() as f64;
-            let target_height = ((image.height() as f64 * ratio).round() as u32).max(1);
-            image::imageops::resize(&image, max_width.max(160), target_height, image::imageops::FilterType::Triangle)
-        } else {
-            image
-        };
 
-        let mut out = Vec::new();
-        let mut cursor = std::io::Cursor::new(&mut out);
-        image
-            .write_to(&mut cursor, image::ImageFormat::Jpeg)
+        // Write the JPEG straight into the output buffer at the requested quality.
+        let mut out = Vec::with_capacity(image.len() / 8);
+        let mut encoder =
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality.clamp(30, 95));
+        encoder
+            .encode_image(&image)
             .map_err(|error| format!("не удалось закодировать JPEG: {error}"))?;
 
         Ok(Shot { jpeg: out, width: width as u32, height: height as u32 })

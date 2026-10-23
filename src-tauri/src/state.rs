@@ -26,6 +26,7 @@ pub struct AppState {
     stage: Mutex<Option<String>>,
     cursor: Mutex<Option<(i32, i32)>>,
     windows: Mutex<Vec<WindowInfo>>,
+    windows_at: Mutex<Option<Instant>>,
     started: Instant,
     commands: AtomicU64,
     notes: AtomicU64,
@@ -49,6 +50,7 @@ impl AppState {
             stage: Mutex::new(None),
             cursor: Mutex::new(None),
             windows: Mutex::new(Vec::new()),
+            windows_at: Mutex::new(None),
             started: Instant::now(),
             commands: AtomicU64::new(0),
             notes: AtomicU64::new(0),
@@ -149,7 +151,24 @@ impl AppState {
     pub fn refresh_windows(&self) -> Vec<WindowInfo> {
         let snapshot = winapi::list_windows();
         *lock(&self.windows) = snapshot.clone();
+        *lock(&self.windows_at) = Some(Instant::now());
         snapshot
+    }
+
+    /// Window list that is at most `max_age` old.
+    ///
+    /// Enumerating every top-level window costs real time on a busy desktop, and nothing
+    /// in the UI needs it on a fixed schedule any more — so the list is built when
+    /// somebody actually asks for it and reused for a short while after.
+    pub fn windows_recent(&self, max_age: std::time::Duration) -> Vec<WindowInfo> {
+        let fresh = {
+            let at = lock(&self.windows_at);
+            matches!(*at, Some(stamp) if stamp.elapsed() < max_age)
+        };
+        if fresh {
+            return self.windows_snapshot();
+        }
+        self.refresh_windows()
     }
 
     pub fn windows_snapshot(&self) -> Vec<WindowInfo> {

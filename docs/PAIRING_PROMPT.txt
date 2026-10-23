@@ -68,6 +68,7 @@ Rules for the log:
 | GET | `/status` | agent state, hostname, uptime, counters |
 | GET | `/windows` | cached list of visible windows |
 | GET | `/journal` | last 100 journal entries |
+| GET | `/board` | status + last 30 journal entries + windows + active window, in one answer |
 | POST | `/note` | `{"text":"…","kind":"stage\|step\|result\|error\|note"}` |
 | POST | `/cmd` | shell / screenshot / gui |
 | POST | `/result` | no-op, kept for compatibility |
@@ -87,6 +88,35 @@ Output is truncated to 20 000 characters.
 ```
 Returns `image_base64` (JPEG), `screen_width`, `screen_height`, `active_window`.
 Add `"screenshot_after": true` to any request to also get a screenshot of the result.
+
+Optional `"width"` (320…3840, default 1100) and `"quality"` (30…95, default 65).
+Ask for 900/55 when you only need to see the layout; ask for 1600/80 when you must read
+small text. Every screenshot travels through a public tunnel, so the smallest picture that
+answers your question is the fastest one.
+
+### Batch
+
+```json
+{"type":"batch","commands":["cd C:\\tools","dir","start app.exe"]}
+```
+Runs up to 20 shell commands in order, in **one** request, and returns
+`{"results":[{"command":…,"output":…,"exit_code":…}],"count":…,"exit_code":…}`.
+Each separate request costs a TLS handshake plus a trip through the tunnel, so batch
+whatever does not depend on your own reading of an intermediate result.
+
+## Doing the work fast
+
+The bridge is not the bottleneck — round trips are. Rules that cut wall-clock time:
+
+* **Write your progress once, not per micro-step.** A `stage` note at the start of a phase
+  and a `result`/`error` at the end is enough; do not narrate every command with a `note`
+  (each note is a request).
+* **Group independent commands** into one `/cmd` with `"type":"batch"`.
+* **Ask for state once**: `/board` instead of `/status` + `/journal` + `/windows`.
+* **Screenshot deliberately**: only when you truly cannot infer the state from command
+  output, and with the smallest `width`/`quality` that still answers the question.
+* **No confirmation round trips for harmless reads** — list, read, `dir`, `Get-Process`
+  and friends can be batched together without asking anyone.
 
 ### GUI
 

@@ -90,6 +90,7 @@ Actions: `windows-latest` собирает один самодостаточны
 | GET | `/status` | состояние агента, хост, uptime, счётчики |
 | GET | `/windows` | кэш списка окон |
 | GET | `/journal` | последние 100 записей журнала |
+| GET | `/board` | статус, журнал (30), окна и активное окно одним ответом |
 | GET | `/poll` | всегда `{"job":null}` (совместимость) |
 | POST | `/note` | `{"text":"…","kind":"stage\|step\|result\|error\|note"}` — запись в лог |
 | POST | `/cmd` | см. ниже |
@@ -101,9 +102,13 @@ curl -s -X POST "$URL/cmd" -H "Authorization: Bearer $KEY" \
      -H 'content-type: application/json' \
      -d '{"command":"dir C:\\Users","shell":"cmd","timeout":60}'
 
-# скриншот
+# скриншот (width 320…3840 по умолчанию 1100, quality 30…95 по умолчанию 65)
 curl -s -X POST "$URL/cmd" -H "Authorization: Bearer $KEY" \
-     -d '{"type":"screenshot"}'
+     -d '{"type":"screenshot","width":900,"quality":55}'
+
+# несколько команд за один запрос (до 20) — экономит рукопожатия и ход по туннелю
+curl -s -X POST "$URL/cmd" -H "Authorization: Bearer $KEY" \
+     -d '{"type":"batch","commands":["cd C:\\tools","dir","Get-Date"]}'
 
 # мышь и клавиатура
 curl -s -X POST "$URL/cmd" -H "Authorization: Bearer $KEY" -d '{
@@ -115,6 +120,14 @@ curl -s -X POST "$URL/cmd" -H "Authorization: Bearer $KEY" -d '{
     {"action":"hotkey","keys":["ctrl","s"]}
   ]}'
 ```
+
+Размер и качество скриншота выбираются параметрами `width`/`quality`: картинка 1100×65
+вчетверо легче полноэкранной, а идёт она через публичный туннель при каждом запросе.
+Уменьшение делает GDI (`StretchBlt`), поэтому на 4K-мониторе кадр не гоняет 20 МБ
+пикселей через память.
+
+`/board` отдаёт статус, последние записи журнала и список окон одним ответом — это
+три запроса меньше, чем `/status` + `/journal` + `/windows`.
 
 Коды: `0` успех, `95` цель не принимает фоновый ввод, `124` таймаут,
 `126` денайлист, `130` failsafe (виртуальный курсор в левом верхнем углу),

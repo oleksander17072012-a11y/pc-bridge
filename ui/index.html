@@ -410,8 +410,14 @@
   function renderState(next) {
     if (!next) return;
     state = next;
-    $("pairing").value = pairingView();
-    fitPairing();
+
+    // The pairing block only changes when the key or the tunnel does; refitting it on
+    // every 3 s state tick forced a layout each time.
+    const pairingText = pairingView();
+    if ($("pairing").value !== pairingText) {
+      $("pairing").value = pairingText;
+      fitPairing();
+    }
     $("revealBtn").textContent = keyVisible ? "Скрыть ключ" : "Показать ключ";
 
     if (!splashFinished) {
@@ -469,6 +475,14 @@
     </div>`;
   }
 
+  // Rebuilding the whole list on every entry is O(n) per line: while the agent works the
+  // journal grows faster than the UI can repaint. Append one node and drop the oldest.
+  const JOURNAL_MAX_NODES = 400;
+
+  function atBottom(box) {
+    return box.scrollHeight - box.scrollTop - box.clientHeight < 24;
+  }
+
   function renderJournal() {
     const box = $("journal");
     box.innerHTML = journalEntries.map(entryHtml).join("");
@@ -478,8 +492,15 @@
   function appendEntry(entry) {
     if (!entry) return;
     journalEntries.push(entry);
-    if (journalEntries.length > 400) journalEntries = journalEntries.slice(-300);
-    renderJournal();
+
+    const box = $("journal");
+    const stick = atBottom(box);
+    box.insertAdjacentHTML("beforeend", entryHtml(entry));
+    while (box.childElementCount > JOURNAL_MAX_NODES) box.removeChild(box.firstElementChild);
+    if (journalEntries.length > JOURNAL_MAX_NODES) journalEntries = journalEntries.slice(-300);
+
+    // Only follow the tail when the user has not scrolled up to read something.
+    if (stick) box.scrollTop = box.scrollHeight;
   }
 
   async function refreshState() {
