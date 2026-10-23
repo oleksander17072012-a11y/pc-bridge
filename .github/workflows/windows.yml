@@ -4,7 +4,8 @@ on:
   push:
     branches: [master, main]
     tags: ["v*"]
-  pull_request:
+  # No `pull_request` trigger: the repository is public and read-only, so an outside PR
+  # must not be able to burn Windows runner minutes. Builds run on our own pushes only.
   workflow_dispatch:
 
 permissions:
