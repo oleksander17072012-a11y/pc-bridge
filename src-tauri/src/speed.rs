@@ -102,7 +102,12 @@ fn there_is_a_cheap_latency_probe() {
 
 #[test]
 fn the_prompt_says_where_the_time_actually_goes() {
-    for rule in ["Do not follow it with a separate", "Trust exit codes", "the number of steps"] {
+    for rule in [
+        "Do not follow it with a separate",
+        "Trust exit codes",
+        "number of steps decides the wall clock",
+        "Pack work together",
+    ] {
         assert!(PROMPT.contains(rule), "missing rule: {rule}");
     }
 }
