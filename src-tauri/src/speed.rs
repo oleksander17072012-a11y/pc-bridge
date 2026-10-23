@@ -74,3 +74,28 @@ fn the_prompt_teaches_the_agent_to_waste_fewer_requests() {
         assert!(PROMPT.contains(rule), "missing speed rule: {rule}");
     }
 }
+
+#[test]
+fn the_bridge_reports_its_own_time() {
+    assert!(RELAY.contains("\"took_ms\""), "answers must say how long the bridge took");
+    assert!(PROMPT.contains("took_ms"));
+}
+
+#[test]
+fn a_journal_line_can_ride_along_with_a_command() {
+    assert!(RELAY.contains("payload.get(\"note\")"));
+    assert!(RELAY.contains("note_kind"));
+    assert!(PROMPT.contains("\"note\":\"создана папка"), "the prompt must show the one-request form");
+}
+
+#[test]
+fn there_is_a_cheap_latency_probe() {
+    assert!(RELAY.contains(".route(\"/ping\", get(ping))"));
+}
+
+#[test]
+fn the_prompt_says_where_the_time_actually_goes() {
+    for rule in ["Do not follow it with a separate", "Trust exit codes", "the number of steps"] {
+        assert!(PROMPT.contains(rule), "missing rule: {rule}");
+    }
+}

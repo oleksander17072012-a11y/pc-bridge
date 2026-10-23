@@ -59,6 +59,7 @@ pub fn serve(state: Arc<AppState>, listener: std::net::TcpListener) {
             .route("/windows", get(windows))
             .route("/journal", get(journal_tail))
             .route("/board", get(board))
+            .route("/ping", get(ping))
             .route("/note", post(note))
             .route("/result", post(result))
             .route("/cmd", post(cmd))
@@ -110,6 +111,22 @@ async fn windows(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Resp
     json_response(
         StatusCode::OK,
         json!({ "windows": state.windows_recent(std::time::Duration::from_millis(700)) }),
+    )
+}
+
+/// Tiny authenticated endpoint: lets the agent measure the tunnel latency without
+/// pulling any state, and confirm the key still works.
+async fn ping(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    if !authorized(&state, &headers) {
+        return unauthorized();
+    }
+    json_response(
+        StatusCode::OK,
+        json!({
+            "ok": true,
+            "ms_since_start": state.uptime_seconds() * 1000,
+            "version": env!("CARGO_PKG_VERSION"),
+        }),
     )
 }
 
@@ -197,6 +214,16 @@ async fn cmd(State(state): State<Arc<AppState>>, headers: HeaderMap, body: Bytes
     let payload: Value = serde_json::from_slice(&body).unwrap_or_else(|_| json!({}));
     let kind = payload.get("type").and_then(|value| value.as_str()).unwrap_or("shell").to_string();
     state.bump_commands();
+    let started = std::time::Instant::now();
+
+    // A journal line can travel with the command: one request instead of two.
+    if let Some(text) = payload.get("note").and_then(|value| value.as_str()) {
+        let text = text.trim();
+        if !text.is_empty() {
+            let note_kind = payload.get("note_kind").and_then(|value| value.as_str()).unwrap_or("note");
+            state.journal.push(&state.app, note_kind, text);
+        }
+    }
 
     let mut answer = match kind.as_str() {
         "shell" => run_shell_job(&state, &payload).await,
@@ -226,6 +253,10 @@ async fn cmd(State(state): State<Arc<AppState>>, headers: HeaderMap, body: Bytes
         }
     }
 
+    // The agent can now tell bridge time from its own thinking time.
+    if let Some(object) = answer.as_object_mut() {
+        object.insert("took_ms".into(), json!(started.elapsed().as_millis() as u64));
+    }
     json_response(StatusCode::OK, answer)
 }
 
@@ -358,7 +389,9 @@ async fn run_gui_job(state: &Arc<AppState>, payload: &Value) -> Value {
     let handle = tokio::task::spawn_blocking(move || {
         worker.show_overlay(true);
         let outcome = input::run(&*worker, &actions);
-        std::thread::sleep(Duration::from_millis(400));
+        // 220 ms is enough for the cursor ring to be seen to settle; the answer does not
+        // wait for the overlay itself, only for this short beat.
+        std::thread::sleep(Duration::from_millis(220));
         worker.show_overlay(false);
         outcome
     });
