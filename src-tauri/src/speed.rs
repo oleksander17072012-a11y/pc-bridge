@@ -102,13 +102,16 @@ fn there_is_a_cheap_latency_probe() {
 
 #[test]
 fn the_prompt_says_where_the_time_actually_goes() {
+    // Compare case-insensitively: the rules are prose, not identifiers, and asserting on
+    // exact capitalisation just breaks the build when the wording is improved.
+    let prompt = PROMPT.to_lowercase();
     for rule in [
-        "Do not follow it with a separate",
-        "Trust exit codes",
+        "do not follow it with a separate",
+        "trust exit codes",
         "number of steps decides the wall clock",
-        "Pack work together",
+        "pack work together",
     ] {
-        assert!(PROMPT.contains(rule), "missing rule: {rule}");
+        assert!(prompt.contains(rule), "missing rule: {rule}");
     }
 }
 
