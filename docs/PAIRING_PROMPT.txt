@@ -69,9 +69,18 @@ with a long wall clock means the delay was your own generation, not the PC.
 ```
 
 * `shell` is `cmd` (default) or `powershell`.
-* `timeout` is seconds, default 110, maximum 600.
-* Output is truncated to 20 000 characters.
+* `timeout` is optional seconds. **Omit it and the command may run for as long as it
+  needs** — there is no default limit and no maximum. Pass a number only when you want a
+  long job to be cut off.
+* Output is returned in full, however long.
 * Answer: `{"output":"…","exit_code":0,"host":"…","took_ms":…}`.
+
+Because nothing is capped any more, two habits matter:
+
+* a command that never finishes keeps its request open forever — prefer
+  `timeout` for anything that could hang (servers, installers, network waits);
+* enormous output (a recursive `dir /s` over the whole disk) arrives in full and costs
+  time and bandwidth — narrow the command instead (`-First 50`, `-TotalCount`).
 
 ### Journal line riding along
 
@@ -88,7 +97,7 @@ inside the same request:
 {"type":"batch","commands":["cd C:\\tools","dir","Get-Date"]}
 ```
 
-Up to 20 commands, executed in order. Answer:
+Any number of commands, executed in order (no cap). Answer:
 `{"results":[{"command":…,"output":…,"exit_code":…}],"count":3,"exit_code":0}`.
 Use it for everything that does not depend on you reading an intermediate result.
 

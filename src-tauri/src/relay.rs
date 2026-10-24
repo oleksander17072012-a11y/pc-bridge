@@ -169,9 +169,6 @@ async fn note(State(state): State<Arc<AppState>>, headers: HeaderMap, body: Byte
     if text.is_empty() {
         return json_response(StatusCode::BAD_REQUEST, json!({ "error": "text is required" }));
     }
-    if text.chars().count() > 2000 {
-        return json_response(StatusCode::PAYLOAD_TOO_LARGE, json!({ "error": "note too long (max 2000 characters)" }));
-    }
 
     // Notes double as a structured work log: "stage" starts a phase, "step" narrates one
     // action, "result"/"error" closes it. Anything else is a plain note.
@@ -266,17 +263,24 @@ async fn run_shell_job(state: &Arc<AppState>, payload: &Value) -> Value {
         return json!({ "error": "no command", "exit_code": 400 });
     }
     let shell_kind = payload.get("shell").and_then(|value| value.as_str()).map(str::to_string);
-    let timeout = payload.get("timeout").and_then(|value| value.as_u64()).unwrap_or(110).clamp(1, 600);
+    // `timeout` is optional and honoured as given; without it the command may run for as
+    // long as it needs.
+    let timeout = payload.get("timeout").and_then(|value| value.as_u64());
 
     state.journal.push(&state.app, "shell", &format!("$ {}", truncate(&command, 300)));
     let state_after = Arc::clone(state);
     let command_for_thread = command.clone();
     let handle = tokio::task::spawn_blocking(move || {
-        shell::run(&command_for_thread, shell_kind.as_deref(), Duration::from_secs(timeout))
+        shell::run(
+            &command_for_thread,
+            shell_kind.as_deref(),
+            timeout.map(Duration::from_secs),
+        )
     });
 
-    match tokio::time::timeout(Duration::from_secs(timeout + 10), handle).await {
-        Ok(Ok(outcome)) => {
+    // The HTTP request waits without a ceiling; only the command's own timeout applies.
+    match handle.await {
+        Ok(outcome) => {
             state_after.journal.push(
                 &state_after.app,
                 "shell",
@@ -284,8 +288,7 @@ async fn run_shell_job(state: &Arc<AppState>, payload: &Value) -> Value {
             );
             json!({ "output": outcome.output, "exit_code": outcome.exit_code, "host": state_after.hostname })
         }
-        Ok(Err(error)) => json!({ "output": format!("[error] {error}"), "exit_code": 1 }),
-        Err(_) => json!({ "output": "[timeout] the command did not finish in time", "exit_code": 124 }),
+        Err(error) => json!({ "output": format!("[error] {error}"), "exit_code": 1 }),
     }
 }
 
@@ -297,10 +300,9 @@ async fn run_screenshot_job() -> Value {
 /// picture depending on what it needs.
 async fn run_screenshot_job_with(width: u32, quality: u8) -> Value {
     let handle = tokio::task::spawn_blocking(move || capture_payload(width, quality));
-    match tokio::time::timeout(Duration::from_secs(60), handle).await {
-        Ok(Ok(value)) => value,
-        Ok(Err(error)) => json!({ "screenshot_error": format!("{error}"), "exit_code": 1 }),
-        Err(_) => json!({ "screenshot_error": "capture timed out", "exit_code": 124 }),
+    match handle.await {
+        Ok(value) => value,
+        Err(error) => json!({ "screenshot_error": format!("{error}"), "exit_code": 1 }),
     }
 }
 
@@ -328,7 +330,6 @@ async fn run_batch_job(state: &Arc<AppState>, payload: &Value) -> Value {
             items
                 .iter()
                 .filter_map(|item| item.as_str().map(|text| text.to_string()))
-                .take(20)
                 .collect()
         })
         .unwrap_or_default();
@@ -396,8 +397,8 @@ async fn run_gui_job(state: &Arc<AppState>, payload: &Value) -> Value {
         outcome
     });
 
-    match tokio::time::timeout(Duration::from_secs(240), handle).await {
-        Ok(Ok(outcome)) => {
+    match handle.await {
+        Ok(outcome) => {
             state.journal.push(
                 &state.app,
                 "gui",
@@ -410,7 +411,6 @@ async fn run_gui_job(state: &Arc<AppState>, payload: &Value) -> Value {
                 "host": state.hostname
             })
         }
-        Ok(Err(error)) => json!({ "output": format!("[error] {error}"), "exit_code": 1 }),
-        Err(_) => json!({ "output": "[timeout] gui job exceeded its budget", "exit_code": 124 }),
+        Err(error) => json!({ "output": format!("[error] {error}"), "exit_code": 1 }),
     }
 }

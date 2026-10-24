@@ -10,6 +10,7 @@ const MAIN: &str = include_str!("main.rs");
 const STATE: &str = include_str!("state.rs");
 const INDEX: &str = include_str!("../../ui/index.html");
 const PROMPT: &str = include_str!("../../docs/PAIRING_PROMPT.txt");
+const SHELL: &str = include_str!("shell.rs");
 
 #[test]
 fn screenshots_are_scaled_inside_gdi_not_in_memory() {
@@ -38,7 +39,10 @@ fn screenshots_have_a_size_and_a_quality_knob() {
 #[test]
 fn several_commands_share_one_round_trip() {
     assert!(RELAY.contains("\"batch\" => run_batch_job"));
-    assert!(RELAY.contains(".take(20)"), "a batch must stay bounded");
+    assert!(
+        !RELAY.contains(".take(20)"),
+        "batch size is not capped any more: the user removed that limit"
+    );
     assert!(PROMPT.contains("\"type\":\"batch\""));
 }
 
@@ -120,4 +124,21 @@ fn the_prompt_says_where_the_time_actually_goes() {
 fn the_prompt_forbids_the_base64_workaround() {
     assert!(PROMPT.contains("Base64 tricks are no longer needed"));
     assert!(PROMPT.contains("do not do this any more"));
+}
+
+#[test]
+fn command_limits_are_gone() {
+    // Requested by the user: no default timeout, no clamp, no output truncation,
+    // no note length cap, no batch size cap.
+    assert!(!RELAY.contains(".clamp(1, 600)"), "the shell timeout must not be clamped");
+    assert!(!RELAY.contains("unwrap_or(110)"), "there must be no default timeout");
+    assert!(!SHELL.contains("take(20_000)"), "output must not be truncated");
+    assert!(!RELAY.contains("note too long"), "notes must not be length-capped");
+    assert!(SHELL.contains("pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>)"));
+}
+
+#[test]
+fn a_request_without_a_timeout_waits_for_the_command() {
+    assert!(RELAY.contains("timeout: Option<u64>") || RELAY.contains("and_then(|value| value.as_u64())"));
+    assert!(SHELL.contains("None => receiver.recv()"));
 }

@@ -26,7 +26,8 @@ const DENYLIST: [&str; 12] = [
     "reg delete hklm",
 ];
 
-pub fn run(command: &str, shell: Option<&str>, timeout: Duration) -> Outcome {
+/// `timeout: None` means "wait as long as the command needs".
+pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Outcome {
     let lowered = command.to_lowercase();
     for blocked in DENYLIST {
         if lowered.contains(blocked) {
@@ -73,15 +74,24 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Duration) -> Outcome {
         let _ = sender.send(child.wait_with_output());
     });
 
-    match receiver.recv_timeout(timeout) {
+    // No truncation: the caller gets everything the command printed.
+    let received = match timeout {
+        Some(limit) => receiver.recv_timeout(limit),
+        None => receiver.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected),
+    };
+
+    match received {
         Ok(Ok(output)) => {
             // Never lossy: a Cyrillic path must survive the trip through the console.
             let mut text = crate::encoding::decode(&output.stdout);
             text.push_str(&crate::encoding::decode(&output.stderr));
-            let text: String = text.chars().take(20_000).collect();
             Outcome { output: text, exit_code: output.status.code().unwrap_or(-1) }
         }
         Ok(Err(error)) => Outcome { output: format!("[error] {error}"), exit_code: 1 },
+        Err(mpsc::RecvTimeoutError::Disconnected) => Outcome {
+            output: "[error] the command produced no result".into(),
+            exit_code: 1,
+        },
         Err(_) => {
             // Best effort: the reader thread owns the handle, so kill by PID.
             #[cfg(windows)]
@@ -94,8 +104,9 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Duration) -> Outcome {
                     .stderr(Stdio::null())
                     .status();
             }
+            let seconds = timeout.map(|limit| limit.as_secs()).unwrap_or(0);
             Outcome {
-                output: format!("[timeout after {}s — command killed]", timeout.as_secs()),
+                output: format!("[timeout after {seconds}s — command killed]"),
                 exit_code: 124,
             }
         }
@@ -109,14 +120,14 @@ mod tests {
 
     #[test]
     fn denylist_blocks_destructive_commands() {
-        let outcome = run("format C: /q", None, Duration::from_secs(1));
+        let outcome = run("format C: /q", None, Some(Duration::from_secs(1)));
         assert_eq!(outcome.exit_code, 126);
         assert!(outcome.output.contains("BLOCKED"));
     }
 
     #[test]
     fn runs_a_command_and_reports_output() {
-        let outcome = run("echo pc-bridge-ok", None, Duration::from_secs(20));
+        let outcome = run("echo pc-bridge-ok", None, Some(Duration::from_secs(20)));
         assert_eq!(outcome.exit_code, 0);
         assert!(outcome.output.contains("pc-bridge-ok"));
     }
