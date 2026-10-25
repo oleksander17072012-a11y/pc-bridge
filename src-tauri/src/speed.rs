@@ -135,6 +135,7 @@ fn command_limits_are_gone() {
     assert!(!SHELL.contains("take(20_000)"), "output must not be truncated");
     assert!(!RELAY.contains("note too long"), "notes must not be length-capped");
     assert!(SHELL.contains("pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>)"));
+    assert!(!SHELL.contains("DENYLIST"), "the blocklist is gone: full access was requested");
 }
 
 #[test]

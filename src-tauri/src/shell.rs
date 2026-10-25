@@ -5,13 +5,18 @@ use std::time::Duration;
 pub struct Outcome {
     pub output: String,
     pub exit_code: i32,
+    /// Set when the command matched the watchlist: it still ran, but the user must see it.
+    pub warning: Option<String>,
 }
 
 pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// A last line of defence, not a sandbox. Anything that matters should be confirmed
-/// by the user in the launcher window.
-const DENYLIST: [&str; 12] = [
+/// Commands that get a loud line in the journal when they run.
+///
+/// This is a **watchlist, not a blocklist**: nothing is refused here, because the user
+/// asked for full access to their own machine. What it does is make an irreversible
+/// command impossible to miss in the launcher's log.
+const WATCHLIST: [&str; 12] = [
     "format ",
     "rd /s /q c:",
     "del /s /q c:",
@@ -27,16 +32,19 @@ const DENYLIST: [&str; 12] = [
 ];
 
 /// `timeout: None` means "wait as long as the command needs".
-pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Outcome {
+/// Returns the watchlist entry a command matches, if any.
+pub fn watchlist_hit(command: &str) -> Option<&'static str> {
     let lowered = command.to_lowercase();
-    for blocked in DENYLIST {
-        if lowered.contains(blocked) {
-            return Outcome {
-                output: format!("[BLOCKED by safety denylist] command contains '{}'", blocked.trim()),
-                exit_code: 126,
-            };
-        }
-    }
+    WATCHLIST.iter().find(|entry| lowered.contains(*entry)).copied()
+}
+
+pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Outcome {
+    let warning = watchlist_hit(command).map(|hit| {
+        format!(
+            "внимание: команда содержит «{}» — необратимое действие, выполнено по настройке",
+            hit.trim()
+        )
+    });
 
     let mut process = match shell {
         Some("powershell") | Some("pwsh") => {
@@ -64,7 +72,7 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Out
     let child = match process.spawn() {
         Ok(child) => child,
         Err(error) => {
-            return Outcome { output: format!("[error] {error}"), exit_code: 1 };
+            return Outcome { output: format!("[error] {error}"), exit_code: 1, warning };
         }
     };
 
@@ -85,12 +93,13 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Out
             // Never lossy: a Cyrillic path must survive the trip through the console.
             let mut text = crate::encoding::decode(&output.stdout);
             text.push_str(&crate::encoding::decode(&output.stderr));
-            Outcome { output: text, exit_code: output.status.code().unwrap_or(-1) }
+            Outcome { output: text, exit_code: output.status.code().unwrap_or(-1), warning }
         }
-        Ok(Err(error)) => Outcome { output: format!("[error] {error}"), exit_code: 1 },
+        Ok(Err(error)) => Outcome { output: format!("[error] {error}"), exit_code: 1, warning },
         Err(mpsc::RecvTimeoutError::Disconnected) => Outcome {
             output: "[error] the command produced no result".into(),
             exit_code: 1,
+            warning,
         },
         Err(_) => {
             // Best effort: the reader thread owns the handle, so kill by PID.
@@ -108,6 +117,7 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Out
             Outcome {
                 output: format!("[timeout after {seconds}s — command killed]"),
                 exit_code: 124,
+                warning,
             }
         }
     }
@@ -115,14 +125,16 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Out
 
 #[cfg(test)]
 mod tests {
-    use super::run;
+    use super::{run, watchlist_hit};
     use std::time::Duration;
 
     #[test]
-    fn denylist_blocks_destructive_commands() {
-        let outcome = run("format C: /q", None, Some(Duration::from_secs(1)));
-        assert_eq!(outcome.exit_code, 126);
-        assert!(outcome.output.contains("BLOCKED"));
+    fn dangerous_commands_are_watched_but_not_blocked() {
+        // Full access was requested, so nothing is refused. The guard is visibility:
+        // the command runs and the launcher shows it in red.
+        assert!(watchlist_hit("format C: /q").is_some());
+        assert!(watchlist_hit("DiskPart").is_some());
+        assert!(watchlist_hit("dir C:\\Users").is_none());
     }
 
     #[test]

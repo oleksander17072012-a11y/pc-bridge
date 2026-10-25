@@ -286,7 +286,17 @@ async fn run_shell_job(state: &Arc<AppState>, payload: &Value) -> Value {
                 "shell",
                 &format!("exit={} · {}", outcome.exit_code, truncate(outcome.output.trim(), 240)),
             );
-            json!({ "output": outcome.output, "exit_code": outcome.exit_code, "host": state_after.hostname })
+            // Nothing is blocked, so this line is the alarm: an irreversible command
+            // shows up in red in the launcher while it runs.
+            if let Some(warning) = &outcome.warning {
+                state_after.journal.push(&state_after.app, "error", warning);
+            }
+            json!({
+                "output": outcome.output,
+                "exit_code": outcome.exit_code,
+                "host": state_after.hostname,
+                "warning": outcome.warning,
+            })
         }
         Err(error) => json!({ "output": format!("[error] {error}"), "exit_code": 1 }),
     }
