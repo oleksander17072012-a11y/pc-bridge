@@ -143,3 +143,26 @@ fn a_request_without_a_timeout_waits_for_the_command() {
     assert!(RELAY.contains("timeout: Option<u64>") || RELAY.contains("and_then(|value| value.as_u64())"));
     assert!(SHELL.contains("None => receiver.recv()"));
 }
+
+#[test]
+fn the_prompt_allows_the_system_areas_with_a_question() {
+    let prompt = PROMPT.to_lowercase();
+    // These used to be absolute never-do items; the user allowed them with a question.
+    assert!(!prompt.contains("things you should never do"), "the old ban list must be gone");
+    assert!(prompt.contains("allowed with a question first"));
+    for area in ["windows", "program files", "defender", "autostart", "mass deletion"] {
+        assert!(prompt.contains(area), "the question table must mention {area}");
+    }
+    // What still must never happen is the boot-level group.
+    assert!(prompt.contains("still never — these stop the machine from booting"));
+    assert!(prompt.contains("expand before you delete"));
+}
+
+#[test]
+fn the_watchlist_covers_the_newly_allowed_operations() {
+    for entry in ["c:\\\\windows", "program files", "set-mppreference", "netsh advfirewall", "net user", "reg add"] {
+        assert!(SHELL.contains(entry), "watchlist misses {entry}");
+    }
+    // Still a watchlist: nothing is refused.
+    assert!(!SHELL.contains("BLOCKED"));
+}

@@ -16,19 +16,32 @@ pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// This is a **watchlist, not a blocklist**: nothing is refused here, because the user
 /// asked for full access to their own machine. What it does is make an irreversible
 /// command impossible to miss in the launcher's log.
-const WATCHLIST: [&str; 12] = [
+const WATCHLIST: &[&str] = &[
+    // boot and disk
     "format ",
-    "rd /s /q c:",
-    "del /s /q c:",
-    "shutdown /s",
-    "shutdown /r",
     "diskpart",
     "bcdedit",
-    "cipher /w:",
     "vssadmin delete",
     "wbadmin delete",
-    "net user administrator",
-    "reg delete hklm",
+    "cipher /w:",
+    "clear-disk",
+    // system files and protection (allowed, but never silently)
+    "c:\\windows",
+    "system32",
+    "program files",
+    "set-mppreference",
+    "netsh advfirewall",
+    "sc delete",
+    "sc stop",
+    "reg add",
+    "reg delete",
+    "icacls",
+    // accounts and autostart
+    "net user",
+    "net localgroup",
+    "schtasks /create",
+    "schtasks /delete",
+    "new-itemproperty",
 ];
 
 /// `timeout: None` means "wait as long as the command needs".

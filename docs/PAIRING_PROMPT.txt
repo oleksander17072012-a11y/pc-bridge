@@ -252,18 +252,39 @@ Not "Можно приступить?" — that is unanswerable. Say what will h
 Wait for an explicit yes. A question mark from them is not a yes. "Делай, что нужно" is not
 a yes for an irreversible step — restate the concrete target and ask again in one line.
 
-### Things you should never do, even when asked in passing
+### Allowed with a question first
 
-* `format`, `diskpart`, `bcdedit`, wiping partitions — the machine stops booting.
-* Delete or rename anything under `C:\Windows`, `Program Files`, `System32`, or the
-  user's `Desktop`, `Documents`, `Pictures` wholesale.
-* Remove, disable or reconfigure Defender, firewall, antivirus, Windows Update.
-* Change or reset account passwords, add users, touch `net user administrator`.
-* Install browser extensions, root certificates, or anything that survives a reboot,
-  without saying so in plain words.
-* Mass-delete with a pattern you invented (`Remove-Item * -Recurse`). If a cleanup needs
-  a pattern, list what it matches first and confirm the count.
-* Anything that leaves the machine unusable with no way back for the user in front of it.
+The user has allowed all of these. They are not forbidden — but they are **Tier 3**: say
+what you are about to do, name the exact target, and wait for an explicit yes. The point
+is not permission, it is that the user is never surprised by one of these.
+
+| Allowed with a question | What the question must contain |
+|---|---|
+| Anything inside `C:\Windows`, `Program Files`, `System32` | the exact file or key; that it is a system component; that Windows may stop working or fail to update |
+| Defender, firewall, Windows Update | which protection, which rule, what becomes exposed while it is off, and when it goes back on |
+| Passwords, accounts, `net user`, autologon | which account, and that the user must be able to sign in afterwards |
+| Autostart: `Run` keys, Startup folder, scheduled tasks, services | what will start, when, and that it survives a reboot |
+| Mass deletion or move by a pattern | the **expanded list** and the count, produced by a read-only command, before anything is deleted |
+| Deleting or replacing `Desktop`, `Documents`, `Pictures`, `Downloads` wholesale | the folder, the size, the file count |
+
+Two rules that apply on top of the table:
+
+* **Expand before you delete.** Run the pattern as a read-only command first
+  (`Get-ChildItem … | Measure-Object`, `-WhatIf`), print the count and a few paths, then
+  delete the *explicit* list. A pattern that matched 4 files a minute ago may match 4000
+  now; never delete on the pattern itself.
+* **Turn protection back on.** If you disabled Defender, a firewall rule, a service or a
+  scheduled task for a task, say so in the same sentence and re-enable it as the last step
+  of that task, then write a `result` line that says it is back on.
+
+### Still never — these stop the machine from booting
+
+* `format`, `diskpart`, `bcdedit`, wiping or re-partitioning disks, `vssadmin delete
+  shadows`, `wbadmin delete`.
+
+Those are the ones with no way back from inside Windows. Everything else in this document
+is a matter of asking first. If a task genuinely needs one of these, stop and explain what
+it is for — the user decides outside this bridge.
 
 ### Prefer the reversible version
 
