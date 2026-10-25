@@ -166,3 +166,11 @@ fn the_watchlist_covers_the_newly_allowed_operations() {
     // Still a watchlist: nothing is refused.
     assert!(!SHELL.contains("BLOCKED"));
 }
+
+#[test]
+fn a_batch_keeps_the_settings_of_the_batch() {
+    // Regression: "shell":"powershell" on a batch was dropped, so every command ran in
+    // cmd and PowerShell one-liners failed with «"$d" не является внутренней командой».
+    assert!(RELAY.contains("payload.get(\"shell\")"), "batch must forward shell");
+    assert!(RELAY.contains("payload.get(\"timeout\")"), "batch must forward timeout");
+}

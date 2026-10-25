@@ -347,10 +347,23 @@ async fn run_batch_job(state: &Arc<AppState>, payload: &Value) -> Value {
         return json!({ "error": "batch needs a non-empty 'commands' list", "exit_code": 400 });
     }
 
+    // Settings of the batch itself apply to every command in it: this used to drop
+    // `shell` and `timeout`, so a PowerShell batch silently ran in cmd.
+    let shell = payload.get("shell").cloned().unwrap_or(Value::Null);
+    let timeout = payload.get("timeout").cloned().unwrap_or(Value::Null);
+
     let mut results = Vec::with_capacity(commands.len());
     let mut last_code = 0;
     for command in &commands {
-        let step = json!({ "command": command });
+        let mut step = json!({ "command": command });
+        if let Some(object) = step.as_object_mut() {
+            if !shell.is_null() {
+                object.insert("shell".into(), shell.clone());
+            }
+            if !timeout.is_null() {
+                object.insert("timeout".into(), timeout.clone());
+            }
+        }
         let answer = run_shell_job(state, &step).await;
         last_code = answer.get("exit_code").and_then(|value| value.as_i64()).unwrap_or(0);
         results.push(json!({
