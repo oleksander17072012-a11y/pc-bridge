@@ -70,7 +70,8 @@ public partial class MainWindow : Window
         };
         _rows.Add(new LogRow { Line = $"{entry.Time[11..]}  {entry.Text}", Tone = tone });
         while (_rows.Count > 400) _rows.RemoveAt(0);
-        if (_rows.Count > 0) LogList.ScrollIntoView(_rows[^1]);
+        // Scroll only after the new line has been measured, otherwise the offset lands past the end.
+        Dispatcher.BeginInvoke(new Action(() => LogScroll.ScrollToEnd()), DispatcherPriority.Background);
     }
 
     private void Refresh()
@@ -104,11 +105,17 @@ public partial class MainWindow : Window
 
     // ---------- actions ----------
     private void Copy_Click(object sender, RoutedEventArgs e)
+        => Copy(App.State.PairingBundle(), "скопировано: ключ + промпт");
+
+    private void CopyKey_Click(object sender, RoutedEventArgs e)
+        => Copy(App.State.PairingBlock(), "скопирован блок ключа");
+
+    private void Copy(string text, string message)
     {
         try
         {
-            Clipboard.SetText(App.State.PairingBlock());
-            App.State.Journal.Push("ui", "блок доступа скопирован");
+            Clipboard.SetText(text);
+            App.State.Journal.Push("ui", message);
         }
         catch (Exception error)
         {

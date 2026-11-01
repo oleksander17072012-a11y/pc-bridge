@@ -61,6 +61,9 @@ public sealed class AppState
         return $"PC-BRIDGE-PAIRING v1\nurl={url}\nkey={keyVisible}\ncreated={StartedAt}";
     }
 
+    /// Key block plus the operating instructions: one paste, nothing to attach afterwards.
+    public string PairingBundle() => PairingBlock() + "\n\n---\n\n" + Prompt.Body;
+
     public void WriteKeyFile()
     {
         try { File.WriteAllText(Paths.KeyFile, PairingBlock()); } catch { }
@@ -81,5 +84,6 @@ public sealed class AppState
         ["notes"] = NoteCount,
         ["started_at"] = StartedAt,
         ["data_dir"] = Paths.DataDir,
+        ["prompt_bytes"] = Prompt.Bytes,
     };
 }

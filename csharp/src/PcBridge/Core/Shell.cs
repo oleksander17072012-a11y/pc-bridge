@@ -12,18 +12,30 @@ public static class Shell
     /// which surfaces as `os error 206`.
     private const int ScriptThreshold = 6000;
 
-    /// Not a blocklist: these run, but the launcher shows them in red.
+    /// Not a blocklist: these run, but they are shown in red in the journal.
     private static readonly string[] Watchlist =
     {
-        "format ", "diskpart", "bcdedit", "vssadmin delete", "wbadmin delete", "cipher /w:", "clear-disk",
+        "diskpart", "bcdedit", "vssadmin delete", "wbadmin delete", "cipher /w:", "clear-disk",
         "c:\\windows", "system32", "program files", "set-mppreference", "netsh advfirewall",
         "sc delete", "sc stop", "reg add", "reg delete", "icacls",
         "net user", "net localgroup", "schtasks /create", "schtasks /delete", "new-itemproperty",
     };
 
+    /// `format C:` erases a disk; `Format-Table` and `-Format` do not. Plain words are too blunt here.
+    private static readonly System.Text.RegularExpressions.Regex[] Patterns =
+    {
+        new(@"\bformat\s+[a-z]:", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+        new(@"\bremove-item\b[^\r\n]*-recurse\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+    };
+
     public static string? WatchlistHit(string command)
     {
         var lowered = command.ToLowerInvariant();
+        foreach (var pattern in Patterns)
+        {
+            var match = pattern.Match(command);
+            if (match.Success) return match.Value;
+        }
         return Watchlist.FirstOrDefault(item => lowered.Contains(item));
     }
 
