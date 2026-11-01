@@ -174,3 +174,41 @@ fn a_batch_keeps_the_settings_of_the_batch() {
     assert!(RELAY.contains("payload.get(\"shell\")"), "batch must forward shell");
     assert!(RELAY.contains("payload.get(\"timeout\")"), "batch must forward timeout");
 }
+
+#[test]
+fn long_commands_never_hit_the_windows_command_line_limit() {
+    // os error 206 came from a one-liner longer than the 32 767-byte command line.
+    assert!(SHELL.contains("const SCRIPT_THRESHOLD: usize = 6000;"));
+    assert!(SHELL.contains("fn write_script"));
+    assert!(SHELL.contains("-ExecutionPolicy"));
+}
+
+#[test]
+fn background_jobs_exist_for_work_longer_than_cloudflare_allows() {
+    // Cloudflare closes a proxied request after ~100 s, so a long build must be pollable.
+    assert!(RELAY.contains("\"background\""), "cmd must accept a background flag");
+    assert!(RELAY.contains(".route(\"/job/{id}\", get(job_status))"));
+    assert!(RELAY.contains(".route(\"/jobs\", get(job_list))"));
+    assert!(RELAY.contains("fn run_job("), "the job body must be reusable");
+}
+
+#[test]
+fn files_can_be_sent_and_fetched_without_base64_typing() {
+    assert!(RELAY.contains(".route(\"/files\", post(files_upload))"));
+    assert!(RELAY.contains(".route(\"/file\", get(file_download))"));
+    assert!(RELAY.contains(".route(\"/shot\", get(shot))"), "raw JPEG, no base64 wrapper");
+    assert!(RELAY.contains("either 'text' or 'data' is required"));
+}
+
+#[test]
+fn waiting_is_a_request_not_a_sleep_guess() {
+    assert!(RELAY.contains(".route(\"/wait\", post(wait_for))"));
+    for kind in ["port", "process", "window", "file"] {
+        assert!(RELAY.contains(&format!("payload.get(\"{kind}\")")), "wait misses {kind}");
+    }
+}
+
+#[test]
+fn a_bad_command_gets_the_expected_schema_back() {
+    assert!(RELAY.contains("\"expected\""), "400 answers must show the expected body");
+}

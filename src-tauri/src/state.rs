@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition};
 
 use crate::input::CursorSink;
+use crate::jobs::Jobs;
 use crate::journal::Journal;
 use crate::paths;
 use crate::tunnel::Tunnel;
@@ -31,6 +32,7 @@ pub struct AppState {
     commands: AtomicU64,
     notes: AtomicU64,
     started_at: String,
+    pub jobs: Arc<Jobs>,
 }
 
 impl AppState {
@@ -39,6 +41,7 @@ impl AppState {
         let tunnel = Arc::new(Tunnel::new(app.clone(), Arc::clone(&journal)));
         let key = winapi::random_hex(16);
         let hostname = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown-host".to_string());
+        let jobs = Arc::new(Jobs::new());
         let state = Arc::new(AppState {
             app,
             journal,
@@ -55,6 +58,7 @@ impl AppState {
             commands: AtomicU64::new(0),
             notes: AtomicU64::new(0),
             started_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            jobs,
         });
         state.write_key_file();
         state

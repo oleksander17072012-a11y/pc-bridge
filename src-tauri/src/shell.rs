@@ -51,6 +51,10 @@ pub fn watchlist_hit(command: &str) -> Option<&'static str> {
     WATCHLIST.iter().find(|entry| lowered.contains(*entry)).copied()
 }
 
+/// Above this the command line gets close to the Windows limit (32 767 bytes), which
+/// surfaces as `os error 206`. Such commands are written to a temporary script instead.
+const SCRIPT_THRESHOLD: usize = 6000;
+
 pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Outcome {
     let warning = watchlist_hit(command).map(|hit| {
         format!(
@@ -59,14 +63,33 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Out
         )
     });
 
-    let mut process = match shell {
-        Some("powershell") | Some("pwsh") => {
+    // A very long one-liner would hit the Windows command-line limit; run it from a file.
+    let temp_script = if command.len() > SCRIPT_THRESHOLD {
+        write_script(command, shell).ok()
+    } else {
+        None
+    };
+
+    let mut process = match (shell, &temp_script) {
+        (Some("powershell") | Some("pwsh"), Some(path)) => {
+            let mut command_line = Command::new("powershell");
+            command_line.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]);
+            command_line.arg(path);
+            command_line
+        }
+        (_, Some(path)) => {
+            let mut command_line = Command::new("cmd.exe");
+            command_line.args(["/c"]);
+            command_line.arg(path);
+            command_line
+        }
+        (Some("powershell") | Some("pwsh"), None) => {
             let mut command_line = Command::new("powershell");
             let wrapped = crate::encoding::powershell_wrapper(command);
             command_line.args(["-NoProfile", "-NonInteractive", "-Command", &wrapped]);
             command_line
         }
-        _ => {
+        (_, None) => {
             let mut command_line = Command::new("cmd.exe");
             let wrapped = crate::encoding::cmd_wrapper(command);
             command_line.args(["/c", &wrapped]);
@@ -90,6 +113,7 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Out
     };
 
     let pid = child.id();
+    let script_path = temp_script.clone();
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
         let _ = sender.send(child.wait_with_output());
@@ -106,6 +130,9 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Out
             // Never lossy: a Cyrillic path must survive the trip through the console.
             let mut text = crate::encoding::decode(&output.stdout);
             text.push_str(&crate::encoding::decode(&output.stderr));
+            if let Some(path) = &script_path {
+                let _ = std::fs::remove_file(path);
+            }
             Outcome { output: text, exit_code: output.status.code().unwrap_or(-1), warning }
         }
         Ok(Err(error)) => Outcome { output: format!("[error] {error}"), exit_code: 1, warning },
@@ -134,6 +161,21 @@ pub fn run(command: &str, shell: Option<&str>, timeout: Option<Duration>) -> Out
             }
         }
     }
+}
+
+/// Writes a long command to a temporary script and returns its path.
+fn write_script(command: &str, shell: Option<&str>) -> Result<std::path::PathBuf, std::io::Error> {
+    let powershell = matches!(shell, Some("powershell") | Some("pwsh"));
+    let extension = if powershell { "ps1" } else { "bat" };
+    let mut path = std::env::temp_dir();
+    path.push(format!("pcbridge-{}.{}", crate::winapi::random_hex(6), extension));
+    let body = if powershell {
+        format!("$ErrorActionPreference='Continue'\n{command}\n")
+    } else {
+        format!("@echo off\r\nchcp 65001>nul\r\n{command}\r\n")
+    };
+    std::fs::write(&path, body)?;
+    Ok(path)
 }
 
 #[cfg(test)]

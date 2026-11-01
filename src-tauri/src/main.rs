@@ -7,6 +7,7 @@ mod b64;
 mod commands;
 mod encoding;
 mod input;
+mod jobs;
 mod journal;
 mod paths;
 mod prompt;

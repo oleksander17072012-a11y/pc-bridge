@@ -23,9 +23,44 @@ pub fn encode(input: &[u8]) -> String {
     out
 }
 
+
+/// Decodes standard base64 (padding optional, whitespace ignored). `None` on bad input.
+pub fn decode(input: &str) -> Option<Vec<u8>> {
+    fn value(byte: u8) -> Option<u32> {
+        Some(match byte {
+            b'A'..=b'Z' => (byte - b'A') as u32,
+            b'a'..=b'z' => (byte - b'a') as u32 + 26,
+            b'0'..=b'9' => (byte - b'0') as u32 + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        })
+    }
+
+    let mut out = Vec::with_capacity(input.len() / 4 * 3);
+    let mut buffer = 0u32;
+    let mut bits = 0u32;
+    for byte in input.bytes() {
+        if byte == b'=' {
+            break;
+        }
+        if byte.is_ascii_whitespace() {
+            continue;
+        }
+        buffer = (buffer << 6) | value(byte)?;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+            buffer &= (1 << bits) - 1;
+        }
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::encode;
+    use super::{decode, encode};
 
     #[test]
     fn matches_rfc4648_vectors() {
@@ -39,5 +74,15 @@ mod tests {
     #[test]
     fn encodes_binary_payload() {
         assert_eq!(encode(&[0u8, 255, 128]), "AP+A");
+    }
+
+    #[test]
+    fn decodes_what_it_encodes() {
+        for sample in [b"".as_slice(), b"f", b"fo", b"foo", b"foobar"] {
+            assert_eq!(decode(&encode(sample)).as_deref(), Some(sample));
+        }
+        assert_eq!(decode("Zm9vYmFy").as_deref(), Some(b"foobar".as_slice()));
+        assert_eq!(decode(" Zm9v\nYmFy ").as_deref(), Some(b"foobar".as_slice()));
+        assert!(decode("not base64!!").is_none());
     }
 }
