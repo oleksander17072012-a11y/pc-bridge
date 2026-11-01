@@ -76,6 +76,21 @@ public static class Relay
                 WriteJson(response, 403, new JsonObject { ["error"] = "bad token" });
                 return;
             }
+            if (path == "/browser/shot")
+            {
+                var body = await Body(request);
+                var (bytes, meta) = await Browser.Shot(
+                    Int(body, "quality", 80), Bool(body, "full"), body["page"]);
+                response.StatusCode = 200;
+                response.ContentType = "image/jpeg";
+                response.ContentLength64 = bytes.Length;
+                response.OutputStream.Write(bytes, 0, bytes.Length);
+                response.OutputStream.Close();
+                _state!.Journal.Push("ui", $"скриншот страницы → {bytes.Length / 1024} КБ");
+                _ = meta;
+                return;
+            }
+
             if (path == "/shot")
             {
                 // Raw JPEG: no JSON envelope, so a browser or an <img> can use it directly.
@@ -98,6 +113,40 @@ public static class Relay
         {
             try { WriteJson(response, 500, new JsonObject { ["error"] = error.Message }); } catch { }
         }
+    }
+
+    private static string? Str(JsonNode? body, string name) =>
+        body?[name] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
+    private static bool Bool(JsonNode? body, string name) =>
+        body?[name] is JsonValue value && value.TryGetValue<bool>(out var flag) && flag;
+
+    private static long? Long(JsonNode? body, string name) =>
+        body?[name] is JsonValue value && value.TryGetValue<long>(out var number) ? number : null;
+
+    private static int Int(JsonNode? body, string name, int fallback) =>
+        body?[name] is JsonValue value && value.TryGetValue<int>(out var number) ? number : fallback;
+
+    private static int QueryInt(string query, string name, int fallback) =>
+        int.TryParse(Query(query, name), out var value) ? value : fallback;
+
+    private static long? Hwnd(string query) =>
+        long.TryParse(Query(query, "hwnd"), out var value) ? value : null;
+
+    private static JsonNode? UrlSelector(string query) =>
+        Query(query, "page") is { } page ? JsonValue.Create(page) : null;
+
+    /// Any exception becomes a readable answer instead of a bare 500.
+    private static (int, JsonNode?) Try(Func<JsonNode> work)
+    {
+        try { return (200, work()); }
+        catch (Exception error) { return (500, new JsonObject { ["error"] = error.Message, ["exit_code"] = 1 }); }
+    }
+
+    private static async Task<(int, JsonNode?)> TryAsync(Func<Task<JsonNode>> work)
+    {
+        try { return (200, await work()); }
+        catch (Exception error) { return (500, new JsonObject { ["error"] = error.Message, ["exit_code"] = 1 }); }
     }
 
     private static int ToInt(string? text, int fallback) => int.TryParse(text, out var value) ? value : fallback;
@@ -175,6 +224,109 @@ public static class Relay
                 var answer = await Command(request, state);
                 var failed = answer["error"] is not null && (answer["exit_code"]?.GetValue<int>() ?? 0) == 400;
                 return (failed ? 400 : 200, answer);
+            }
+
+            // ---------- UI Automation: нажать по имени, без курсора ----------
+            case "/ui/tree":
+                return Try(() => Ui.Tree(
+                    Query(query, "window"), Query(query, "process"), Hwnd(query),
+                    QueryInt(query, "depth", 3), QueryInt(query, "limit", 400)));
+
+            case "/ui/invoke":
+            {
+                var body = await Body(request);
+                return Try(() => Ui.Invoke(
+                    Str(body, "window"), Str(body, "process"), Long(body, "hwnd"),
+                    Str(body, "name"), Str(body, "automation_id"), Str(body, "kind")));
+            }
+
+            case "/ui/set":
+            {
+                var body = await Body(request);
+                return Try(() => Ui.SetValue(
+                    Str(body, "window"), Str(body, "process"), Long(body, "hwnd"),
+                    Str(body, "name"), Str(body, "automation_id"), Str(body, "value") ?? ""));
+            }
+
+            case "/ui/read":
+            {
+                var body = await Body(request);
+                return Try(() => Ui.Read(
+                    Str(body, "window"), Str(body, "process"), Long(body, "hwnd"),
+                    Str(body, "name"), Str(body, "automation_id")));
+            }
+
+            // ---------- браузер через DevTools Protocol ----------
+            case "/browser/start":
+            {
+                var body = await Body(request);
+                return await TryAsync(() => Browser.Start(
+                    QueryInt(query, "port", Int(body, "port", 9333)),
+                    Bool(body, "headless"), Bool(body, "user_profile"), Str(body, "browser") ?? "chrome"));
+            }
+
+            case "/browser/status":
+                return await TryAsync(Browser.Status);
+
+            case "/browser/pages":
+                return await TryAsync(Browser.ListPages);
+
+            case "/browser/open":
+            {
+                var body = await Body(request);
+                var url = Str(body, "url") ?? "about:blank";
+                return await TryAsync(() => Browser.Open(url, Bool(body, "background")));
+            }
+
+            case "/browser/navigate":
+            {
+                var body = await Body(request);
+                return await TryAsync(() => Browser.Navigate(Str(body, "url") ?? "about:blank", body["page"]));
+            }
+
+            case "/browser/eval":
+            {
+                var body = await Body(request);
+                var expression = Str(body, "expression") ?? Str(body, "js");
+                if (string.IsNullOrWhiteSpace(expression))
+                    return (400, new JsonObject { ["error"] = "нужен expression", ["expected"] = "{\"expression\":\"document.title\"}", ["exit_code"] = 400 });
+                return await TryAsync(() => Browser.Evaluate(expression, body["page"]));
+            }
+
+            case "/browser/click":
+            {
+                var body = await Body(request);
+                return await TryAsync(() => Browser.Click(
+                    Str(body, "selector"),
+                    body["x"]?.GetValue<double>(), body["y"]?.GetValue<double>(), body["page"],
+                    Bool(body, "real")));
+            }
+
+            case "/browser/type":
+            {
+                var body = await Body(request);
+                return await TryAsync(() => Browser.Type(Str(body, "selector"), Str(body, "text") ?? "", Bool(body, "replace"), body["page"]));
+            }
+
+            case "/browser/key":
+            {
+                var body = await Body(request);
+                var keys = (body["keys"] as JsonArray)?.Select(k => k?.GetValue<string>() ?? "").ToArray()
+                           ?? new[] { Str(body, "key") ?? "" };
+                return await TryAsync(() => Browser.Key(keys.Where(k => k.Length > 0).ToArray(), body["page"]));
+            }
+
+            case "/browser/text":
+            {
+                var body = await Body(request);
+                return await TryAsync(() => Browser.Text(Str(body, "selector") ?? Query(query, "selector"), body["page"] ?? UrlSelector(query)));
+            }
+
+            case "/browser/wait":
+            {
+                var body = await Body(request);
+                return await TryAsync(() => Browser.WaitFor(
+                    Str(body, "selector"), Str(body, "text"), Int(body, "timeout", 30), body["page"]));
             }
 
             default:
@@ -360,7 +512,10 @@ public static class Relay
             state.Journal.Push(noteKind, note);
         }
 
-        var background = payload["background"]?.GetValue<bool>() ?? false;
+        // `background` means two different things: a job for plain commands, background
+        // input for gui. Keeping one word is friendlier than adding a second flag.
+        var guiBackground = payload["background"]?.GetValue<bool>() == true && payload["type"]?.GetValue<string>() == "gui";
+        var background = payload["background"]?.GetValue<bool>() == true && !guiBackground;
         if (background)
         {
             var id = state.Jobs.Start();
@@ -449,6 +604,28 @@ public static class Relay
             {
                 var actions = payload["actions"] as JsonArray ?? new JsonArray();
                 if (actions.Count == 0) return new JsonObject { ["error"] = "gui needs 'actions'", ["exit_code"] = 400 };
+
+                // background: messages go straight to the window — no cursor, no focus, the user
+                // keeps typing in their own window. Works for classic apps; browsers need /browser.
+                // Inside a gui job `background` can only mean background input.
+                if (payload["mode"]?.GetValue<string>() == "background" || payload["background"]?.GetValue<bool>() == true)
+                {
+                    var handle = Background.Resolve(
+                        payload["window"]?.GetValue<string>(),
+                        payload["process"]?.GetValue<string>(),
+                        payload["hwnd"] is { } hwndNode ? hwndNode.GetValue<long>() : null);
+                    var restore = payload["restore"]?.GetValue<bool>() == true;
+                    var (backgroundCode, backgroundOutput) = await Task.Run(
+                        () => Background.Run(handle, payload["window"]?.GetValue<string>(), payload["process"]?.GetValue<string>(), actions, restore));
+                    return new JsonObject
+                    {
+                        ["output"] = backgroundOutput,
+                        ["exit_code"] = backgroundCode,
+                        ["mode"] = "background",
+                        ["host"] = state.Hostname,
+                    };
+                }
+
                 var (code, output, done) = await Task.Run(() => Input.Run(actions));
                 return new JsonObject { ["output"] = output, ["exit_code"] = code, ["actions_done"] = done, ["host"] = state.Hostname };
             }

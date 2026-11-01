@@ -17,6 +17,8 @@ public static class Input
         ["f11"] = 0x7A, ["f12"] = 0x7B,
     };
 
+    public static byte? VirtualKeyOf(string name) => VirtualKey(name);
+
     private static byte? VirtualKey(string name)
     {
         if (SpecialKeys.TryGetValue(name, out var code)) return code;
