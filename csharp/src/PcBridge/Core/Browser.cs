@@ -713,6 +713,25 @@ public static class Browser
         return new JsonObject { ["ok"] = false, ["exit_code"] = 124, ["error"] = "страница не появилась" };
     }
 
+    /// Closes a tab by id — only the ones you opened yourself.
+    public static async Task<JsonNode> Close(string targetId)
+    {
+        if (await HttpText("/json/version") is not { } versionText)
+            return new JsonObject { ["ok"] = false, ["exit_code"] = 503, ["error"] = "браузер не запущен" };
+        var version = JsonNode.Parse(versionText) as JsonObject;
+        var browserWs = version?["webSocketDebuggerUrl"]?.GetValue<string>();
+        if (browserWs is null) return new JsonObject { ["ok"] = false, ["exit_code"] = 1, ["error"] = "нет webSocketDebuggerUrl" };
+
+        Sessions.Remove(targetId, out var cached);
+        cached?.Dispose();
+
+        var browser = await Page.ConnectAsync("browser", browserWs);
+        var answer = await browser.Send("Target.closeTarget", new JsonObject { ["targetId"] = targetId });
+        browser.Dispose();
+        var closed = answer["result"]?["success"]?.GetValue<bool>() ?? false;
+        return new JsonObject { ["ok"] = closed, ["id"] = targetId, ["exit_code"] = closed ? 0 : 1 };
+    }
+
     // ---------- actions ----------
     public static async Task<JsonNode> Navigate(string url, JsonNode? selector)
     {

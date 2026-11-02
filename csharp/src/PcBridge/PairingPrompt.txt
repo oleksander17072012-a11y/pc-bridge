@@ -68,7 +68,8 @@ created=<date>
 | POST | `/browser/start` | launch the automation browser (Chrome/Edge) with DevTools open |
 | GET | `/browser/status` `/browser/pages` | is it up, which tabs exist |
 | GET | `/browser/targets` | all targets incl. extension workers + which profile is attached |
-| POST | `/browser/open` | new tab: `{"url":"…"}` → `{"id":"…"}` |
+| POST | `/browser/open` | new tab: `{"url":"…"}` → `{"id":"…"}` (add `"background":true`) |
+| POST | `/browser/close` | close a tab you opened: `{"page":"…"}` |
 | POST | `/browser/navigate` `/browser/eval` `/browser/text` | go, run JS, read text |
 | POST | `/browser/click` `/browser/type` `/browser/key` `/browser/wait` | act on elements by CSS selector |
 | POST | `/browser/shot` | screenshot of the page, raw JPEG |
@@ -266,7 +267,8 @@ user's sign-ins, extensions or bookmarks:
   and lists extension workers and pages. Run it right after switching profiles instead of
   guessing from a screenshot.
 * Their tabs are their tabs: do not close them, do not navigate a tab you did not open.
-  Prefer `{"background": true}` when opening a page next to what they are doing.
+  Prefer `{"background": true}` when opening a page next to what they are doing, and close
+  your own tabs with `/browser/close` when the job is done.
 
 Then, in one workflow:
 

@@ -283,6 +283,15 @@ public static class Relay
                 return await TryAsync(() => Browser.Open(url, Bool(body, "background")));
             }
 
+            case "/browser/close":
+            {
+                var body = await Body(request);
+                var id = Str(body, "page") ?? Str(body, "id") ?? Query(query, "page");
+                if (string.IsNullOrWhiteSpace(id))
+                    return (400, new JsonObject { ["error"] = "нужен id вкладки", ["expected"] = "{\"page\":\"ABC…\"}", ["exit_code"] = 400 });
+                return await TryAsync(() => Browser.Close(id));
+            }
+
             case "/browser/navigate":
             {
                 var body = await Body(request);
