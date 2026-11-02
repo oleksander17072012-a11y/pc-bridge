@@ -12,37 +12,62 @@ public static class Shell
     /// which surfaces as `os error 206`.
     private const int ScriptThreshold = 6000;
 
-    /// Not a blocklist: these run, but they are shown in red in the journal.
-    private static readonly string[] Watchlist =
+    /// Not a blocklist: these run, but the journal flags them. The label says what kind of
+    /// irreversible action it is — the command itself is already described a line above.
+    private static readonly (string Needle, string Label)[] Watchlist =
     {
-        "diskpart", "bcdedit", "vssadmin delete", "wbadmin delete", "cipher /w:", "clear-disk",
-        "c:\\windows", "system32", "program files", "set-mppreference", "netsh advfirewall",
-        "sc delete", "sc stop", "reg add", "reg delete", "icacls",
-        "net user", "net localgroup", "schtasks /create", "schtasks /delete", "new-itemproperty",
+        ("format ", "форматирование диска"),
+        ("diskpart", "работа с разделами диска"),
+        ("clear-disk", "стирание диска"),
+        ("bcdedit", "правка загрузчика"),
+        ("vssadmin delete", "удаление теневых копий"),
+        ("wbadmin delete", "удаление резервных копий"),
+        ("cipher /w:", "затирание свободного места"),
+        ("reg add", "правка реестра"),
+        ("reg delete", "удаление из реестра"),
+        ("new-itemproperty", "правка реестра"),
+        ("icacls", "смена прав доступа"),
+        ("net user", "учётные записи"),
+        ("net localgroup", "группы пользователей"),
+        ("schtasks /create", "новое задание планировщика"),
+        ("schtasks /delete", "удаление задания планировщика"),
+        ("sc delete", "удаление службы"),
+        ("sc stop", "остановка службы"),
+        ("set-mppreference", "настройки Defender"),
+        ("netsh advfirewall", "правила брандмауэра"),
+        ("c:\\windows", "системная папка Windows"),
+        ("system32", "системная папка"),
+        ("program files", "папка Program Files"),
     };
 
     /// `format C:` erases a disk; `Format-Table` and `-Format` do not. Plain words are too blunt here.
     private static readonly System.Text.RegularExpressions.Regex[] Patterns =
     {
-        new(@"\bformat\s+[a-z]:", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+        new(@"(?<![\w-])format\s+[a-z]:", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
         new(@"\bremove-item\b[^\r\n]*-recurse\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+        new(@"\brm\b[^\r\n]*-recurse\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase),
     };
 
     public static string? WatchlistHit(string command)
     {
-        var lowered = command.ToLowerInvariant();
         foreach (var pattern in Patterns)
         {
-            var match = pattern.Match(command);
-            if (match.Success) return match.Value;
+            if (!pattern.IsMatch(command)) continue;
+            // A delete with -Recurse inside a build folder is routine; say so plainly.
+            return pattern.ToString().Contains("remove-item") || pattern.ToString().Contains("rm")
+                ? "удаление с -Recurse"
+                : "необратимая команда";
         }
-        return Watchlist.FirstOrDefault(item => lowered.Contains(item));
+        var lowered = command.ToLowerInvariant();
+        foreach (var (needle, label) in Watchlist)
+            if (lowered.Contains(needle)) return label;
+        return null;
     }
 
     public static ShellResult Run(string command, string? shell, TimeSpan? timeout)
     {
         var warning = WatchlistHit(command) is { } hit
-            ? $"внимание: команда содержит «{hit.Trim()}» — необратимое действие, выполнено по настройке"
+            ? $"осторожно: {hit} · выполнено"
             : null;
 
         var powershell = shell is "powershell" or "pwsh";

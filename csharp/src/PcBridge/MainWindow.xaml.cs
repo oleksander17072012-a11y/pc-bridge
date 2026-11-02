@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private readonly Brush _dim = Freeze("#7E8698");
     private readonly Brush _alert = Freeze("#FF7A6B");
     private readonly Brush _ok = Freeze("#6FD08C");
+    private readonly Brush _warn = Freeze("#E0B357");
 
     private static Brush Freeze(string hex)
     {
@@ -70,6 +71,7 @@ public partial class MainWindow : Window
         var tone = entry.Kind switch
         {
             "error" => _alert,
+            "warn" => _warn,
             "shell" => _plain,
             "ui" => _ok,
             _ => _dim,
