@@ -94,6 +94,10 @@ public static class Shell
         }
         else
         {
+            // `cmd /c "chcp 65001>nul & mkdir "C:\path""` breaks: the nested quotes split the
+            // argument, and cmd then reports "Синтаксическая ошибка в имени файла". Writing the
+            // command to a .bat keeps every quote, Cyrillic character and & exactly as written.
+            scriptPath = WriteScript(command, powershell: false);
             info = new ProcessStartInfo("cmd.exe")
             {
                 CreateNoWindow = true,
@@ -102,7 +106,7 @@ public static class Shell
                 RedirectStandardError = true,
             };
             info.ArgumentList.Add("/c");
-            info.ArgumentList.Add("chcp 65001>nul & " + command);
+            info.ArgumentList.Add(scriptPath);
         }
 
         try
