@@ -59,8 +59,8 @@
                        SelectionBrush="{StaticResource Accent}" Padding="0"/>
 
               <Button x:Name="CardCopyButton" HorizontalAlignment="Right" VerticalAlignment="Top"
-                      Width="24" Height="24" Margin="0,0,-26,0" Click="Copy_Click"
-                      Style="{StaticResource IconButton}" ToolTip="Скопировать ключ и промпт">
+                      Width="24" Height="24" Margin="0,0,-26,0" Click="CopyBlock_Click"
+                      Style="{StaticResource IconButton}" ToolTip="Скопировать только этот блок">
                 <Viewbox Width="14" Height="14">
                   <Canvas Width="16" Height="16">
                     <!-- как в присланной иконке: два скруглённых квадрата, задний перекрыт передним -->

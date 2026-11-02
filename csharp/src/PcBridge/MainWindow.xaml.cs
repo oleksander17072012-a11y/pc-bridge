@@ -110,9 +110,13 @@ public partial class MainWindow : Window
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     // ---------- actions ----------
-    /// Одна кнопка на всё: блок доступа, разделитель и инструкции — вставлять одним куском.
+    /// Большая кнопка: блок доступа, разделитель и инструкции — вставлять одним куском.
     private void Copy_Click(object sender, RoutedEventArgs e)
         => Copy(App.State.PairingBundle(), $"скопировано: ключ + промпт ({Prompt.Bytes / 1000.0:0.0} тыс. знаков)");
+
+    /// Иконка у карточки: только сам блок — когда промпт уже отправлен раньше.
+    private void CopyBlock_Click(object sender, RoutedEventArgs e)
+        => Copy(App.State.PairingBlock(), "скопирован блок доступа");
 
     private void Data_Click(object sender, RoutedEventArgs e)
     {
