@@ -24,6 +24,15 @@ public static class Humanizer
         Simple(@"dotnet\s+publish|dotnet\s+build", "компилирую сборку"),
         Simple(@"dotnet\s", "запускаю .NET"),
         Simple(@"Get-Command|where\.exe", "ищу установленную программу"),
+        // pip идёт раньше общего правила про python, иначе установка пакетов
+        // выглядит в журнале как «запускаю Python-скрипт».
+        new(new Regex(@"pip\s+install\b", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            (_, command) => $"ставлю пакеты Python{Packages(command)}"),
+        new(new Regex(@"pip\s+uninstall\b", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            (_, command) => $"удаляю пакеты Python{Packages(command)}"),
+        Simple(@"pip\s+(list|freeze|show)\b", "смотрю список пакетов Python"),
+        Simple(@"pip\s+--version", "смотрю версию pip"),
+        Simple(@"(-V:3|--version|sys\.version|sys\.executable)", "смотрю версию Python"),
         Simple(@"python|py\.exe|\bpy\s", "запускаю Python-скрипт"),
         Simple(@"git\s", "работаю с git"),
         new(new Regex(@"Get-FileHash", RegexOptions.IgnoreCase | RegexOptions.Compiled),
@@ -81,16 +90,44 @@ public static class Humanizer
             : $"выполняю команду «{verb}»";
     }
 
+    // pip, winget и git пишут предупреждения в поток ошибок, и PowerShell из-за этого
+    // возвращает 1, хотя работа сделана. Такие строки не должны выглядеть как поломка.
+    private static bool IsWarningLine(string line) =>
+        line.StartsWith("WARNING:", StringComparison.OrdinalIgnoreCase) ||
+        line.StartsWith("DEPRECATION:", StringComparison.OrdinalIgnoreCase) ||
+        line.StartsWith("Notice:", StringComparison.OrdinalIgnoreCase) ||
+        line.Contains("Consider adding this directory to PATH", StringComparison.OrdinalIgnoreCase) ||
+        line.Contains("no-warn-script-location", StringComparison.OrdinalIgnoreCase) ||
+        line.Contains("is not on PATH", StringComparison.OrdinalIgnoreCase) ||
+        line.Contains("which is not on PATH", StringComparison.OrdinalIgnoreCase);
+
+    private static readonly Regex SuccessLine = new(
+        @"Successfully installed|Successfully|Requirement already satisfied|Успешно установлен|уже установлено|everything up-to-date|Already up to date",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex FailureLine = new(
+        @"^\s*(ERROR|error:|Error:|FATAL|Traceback)|Не удается|не удалось|отказано|Access is denied|failed|FAILED|cannot find|не найден",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     /// A short readable summary of what the command printed.
     public static string DescribeResult(int exitCode, string? output)
     {
         var text = (output ?? "").Trim();
         if (exitCode != 0)
         {
+            var lines = text.Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).ToList();
+            // Только предупреждения, а работа сделана: не пугаем человека красным.
+            var real = lines.Where(line => !IsWarningLine(line)).ToList();
+            if (real.Count > 0 && real.Any(line => SuccessLine.IsMatch(line)) &&
+                !real.Any(line => FailureLine.IsMatch(line))) return "выполнено";
+            if (real.Count == 0) return "выполнено · только предупреждения";
+
             // The first line that is not a stack trace usually says what went wrong.
-            var reason = text.Split('\n').Select(line => line.Trim())
-                .FirstOrDefault(line => line.Length > 0 && line.Length < 200) ?? "";
+            var reason = real.FirstOrDefault(line => line.Length < 200) ?? real[0];
+            // "python.exe : ERROR: …" — имя процесса перед двоеточием человеку ничего не даёт.
+            reason = Regex.Replace(reason, @"^[\w.-]+\.exe\s*:\s*", "");
             reason = Collapse(reason);
+            if (reason.Length > 110) reason = reason[..110] + "…";
             return reason.Length > 0 ? $"не получилось (код {exitCode}) · {reason}" : $"не получилось (код {exitCode})";
         }
 
@@ -121,6 +158,18 @@ public static class Humanizer
         return Describe(text, null) == "жду немного";
     }
 
+    /// How the line should look. Warnings from pip or git are not failures: the work is done,
+    /// so the journal keeps them out of red.
+    public static string Tone(int exitCode, string? output)
+    {
+        if (exitCode == 0) return "shell";
+        var lines = (output ?? "").Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).ToList();
+        var real = lines.Where(line => !IsWarningLine(line)).ToList();
+        if (real.Count == 0) return "warn";
+        if (real.Any(line => SuccessLine.IsMatch(line)) && !real.Any(line => FailureLine.IsMatch(line))) return "shell";
+        return "error";
+    }
+
     /// One line per command: what it did, and only the output that says something.
     public static string Line(string description, int exitCode, string? output)
     {
@@ -134,6 +183,21 @@ public static class Humanizer
             single.Equals("готово", StringComparison.OrdinalIgnoreCase)) return description;
         var brief = single.Length <= 60 ? single : single[..60] + "…";
         return description + " · " + brief;
+    }
+
+    /// Two or three package names, then "и ещё N": the reader needs a hint, not the full list.
+    private static string Packages(string command)
+    {
+        var tail = Regex.Match(command, @"\bpip\s+(?:install|uninstall)\s+(?<rest>[^|;&\n]*)",
+            RegexOptions.IgnoreCase).Groups["rest"].Value;
+        var names = Regex.Matches(tail, @"(?<![\w.-])[A-Za-z][\w.\[\]=<>-]*")
+            .Select(match => match.Value)
+            .Where(name => !name.StartsWith("-") && name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (names.Count == 0) return "";
+        var shown = string.Join(", ", names.Take(2));
+        return names.Count > 2 ? $": {shown} и ещё {names.Count - 2}" : $": {shown}";
     }
 
     /// Files and folders look better as bare names in a sentence.

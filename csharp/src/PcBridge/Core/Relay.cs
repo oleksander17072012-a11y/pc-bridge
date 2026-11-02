@@ -68,7 +68,7 @@ public static class Relay
 
             if (path == "/health")
             {
-                WriteJson(response, 200, new JsonObject { ["ok"] = true, ["service"] = "pc-bridge", ["version"] = "3.5.0" });
+                WriteJson(response, 200, new JsonObject { ["ok"] = true, ["service"] = "pc-bridge", ["version"] = "3.5.3" });
                 return;
             }
             if (!Authorized(request))
@@ -173,7 +173,7 @@ public static class Relay
         switch (path)
         {
             case "/ping":
-                return (200, new JsonObject { ["ok"] = true, ["version"] = "3.5.0", ["ms_since_start"] = state.UptimeSeconds * 1000 });
+                return (200, new JsonObject { ["ok"] = true, ["version"] = "3.5.3", ["ms_since_start"] = state.UptimeSeconds * 1000 });
 
             case "/status":
                 return (200, state.Snapshot());
@@ -621,7 +621,7 @@ public static class Relay
                 var description = quiet ? "" : Humanizer.Describe(command, shell);
                 var result = await Task.Run(() => Shell.Run(command, shell, timeout));
                 if (!quiet)
-                    state.Journal.PushOrMerge(result.ExitCode == 0 ? "shell" : "error",
+                    state.Journal.PushOrMerge(Humanizer.Tone(result.ExitCode, result.Output),
                         Humanizer.Line(description, result.ExitCode, result.Output));
                 if (result.Warning is not null) state.Journal.PushOrMerge("warn", result.Warning, 30);
                 return new JsonObject

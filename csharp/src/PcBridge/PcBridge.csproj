@@ -11,7 +11,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>pc-bridge</AssemblyName>
     <RootNamespace>PcBridge</RootNamespace>
-    <Version>3.5.0</Version>
+    <Version>3.5.3</Version>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
