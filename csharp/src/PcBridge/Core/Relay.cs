@@ -68,7 +68,7 @@ public static class Relay
 
             if (path == "/health")
             {
-                WriteJson(response, 200, new JsonObject { ["ok"] = true, ["service"] = "pc-bridge", ["version"] = "3.2.2" });
+                WriteJson(response, 200, new JsonObject { ["ok"] = true, ["service"] = "pc-bridge", ["version"] = "3.3.1" });
                 return;
             }
             if (!Authorized(request))
@@ -173,7 +173,7 @@ public static class Relay
         switch (path)
         {
             case "/ping":
-                return (200, new JsonObject { ["ok"] = true, ["version"] = "3.2.2", ["ms_since_start"] = state.UptimeSeconds * 1000 });
+                return (200, new JsonObject { ["ok"] = true, ["version"] = "3.3.1", ["ms_since_start"] = state.UptimeSeconds * 1000 });
 
             case "/status":
                 return (200, state.Snapshot());
@@ -584,12 +584,15 @@ public static class Relay
                     };
                 var shell = payload["shell"]?.GetValue<string>();
                 var timeout = payload["timeout"] is { } timeoutNode ? TimeSpan.FromSeconds(timeoutNode.GetValue<int>()) : (TimeSpan?)null;
-                // The journal is read by a person: a sentence instead of raw PowerShell
-                // and base64 blobs. The full command still goes back in the response.
-                state.Journal.Push("shell", Humanizer.Describe(command, shell));
+                // The journal is read by a person: one sentence per command, no raw PowerShell,
+                // no base64 blobs, no idling and polling. The command itself still goes back
+                // in the response — only the journal is cleaned up.
+                var quiet = Humanizer.IsNoise(command);
+                var description = quiet ? "" : Humanizer.Describe(command, shell);
                 var result = await Task.Run(() => Shell.Run(command, shell, timeout));
-                state.Journal.Push(result.ExitCode == 0 ? "shell" : "error",
-                    Humanizer.DescribeResult(result.ExitCode, result.Output));
+                if (!quiet)
+                    state.Journal.PushOrMerge(result.ExitCode == 0 ? "shell" : "error",
+                        Humanizer.Line(description, result.ExitCode, result.Output));
                 if (result.Warning is not null) state.Journal.Push("error", result.Warning);
                 return new JsonObject
                 {

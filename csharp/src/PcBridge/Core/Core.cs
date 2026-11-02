@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -55,6 +56,7 @@ public sealed class Journal
     private const int Max = 2000;
 
     public event Action<JournalEntry>? Added;
+    public event Action<JournalEntry>? Updated;
 
     public Journal(string path) => _path = path;
 
@@ -74,6 +76,38 @@ public sealed class Journal
         }
         try { Added?.Invoke(entry); } catch { }
         return entry;
+    }
+
+    /// Same sentence again within a few seconds (a sync uploading 17 files, a poll loop) is
+    /// noise: the counter is folded into the single line instead of stacking duplicates.
+    public JournalEntry PushOrMerge(string kind, string text, int windowSeconds = 20)
+    {
+        lock (_lock)
+        {
+            var last = _entries.Last?.Value;
+            if (last is not null && last.Kind == kind &&
+                DateTime.TryParse(last.Time, out var lastTime) &&
+                (DateTime.Now - lastTime).TotalSeconds <= windowSeconds &&
+                Strip(last.Text) == Strip(text))
+            {
+                var count = Count(last.Text) + 1;
+                var merged = last with { Text = Clean($"{Strip(text)} ×{count}") };
+                _entries.RemoveLast();
+                _entries.AddLast(merged);
+                var updated = merged;
+                try { Updated?.Invoke(updated); } catch { }
+                return updated;
+            }
+        }
+        return Push(kind, text);
+    }
+
+    private static string Strip(string text) => Regex.Replace(text, @" ×\d+$", "");
+
+    private static int Count(string text)
+    {
+        var match = Regex.Match(text, @" ×(\d+)$");
+        return match.Success && int.TryParse(match.Groups[1].Value, out var value) ? value : 1;
     }
 
     private static string Clean(string text)

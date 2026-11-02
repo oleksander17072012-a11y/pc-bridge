@@ -38,6 +38,12 @@ public partial class MainWindow : Window
         // Fill from the journal that already exists, then follow new entries.
         foreach (var entry in App.State.Journal.Recent(80)) Append(entry);
         App.State.Journal.Added += entry => Dispatcher.BeginInvoke(() => Append(entry));
+        // A repeated operation is folded into one line with a counter: rewrite it in place.
+        App.State.Journal.Updated += entry => Dispatcher.BeginInvoke(() =>
+        {
+            if (_rows.Count > 0) _rows.RemoveAt(_rows.Count - 1);
+            Append(entry);
+        });
 
         _ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
         _ticker.Tick += (_, _) => Refresh();

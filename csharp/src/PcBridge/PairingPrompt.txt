@@ -295,6 +295,10 @@ POST /browser/navigate  {"page":"ABC…","url":"https://…"}
 * `click` by selector or ref uses a DOM click, so it works in background tabs; add
   `"real": true` for a real mouse event at those coordinates (needed when a page checks
   `isTrusted`).
+* The bridge already turns every command into a plain Russian sentence in the journal, so
+  never quote raw PowerShell to the user as an explanation. For longer work push your own short
+  notes — `POST /note {"text":"собираю новую версию","kind":"stage"}` — one line per stage, in
+  plain words: what you are doing and why. Kinds: `stage`, `step`, `result`, `error`.
 * Browser work does not leave the user's window raised: a click may briefly wake a minimised
   window (Chrome only delivers real mouse input to a visible tab) and the bridge puts it back
   minimised, with the previous window back in front. Add `"focus": true` only when the user

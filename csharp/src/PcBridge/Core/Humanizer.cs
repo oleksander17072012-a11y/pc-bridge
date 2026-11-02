@@ -101,6 +101,41 @@ public static class Humanizer
         return single.Length <= 90 ? $"готово · {single}" : $"готово · {single[..90]}…";
     }
 
+
+    /// Commands that carry no information for a human reader: polling loops and idling.
+    private static readonly Regex[] Noise =
+    {
+        new(@"^\s*(Start-Sleep|Wait-Process|Wait-Job|Read-Host)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        new(@"pairing\.key", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        // Inside a verbatim string a quote is doubled, not escaped.
+        new(@"^\s*['""]?(ok|true|готово)['""]?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+        new(@"^\s*(echo|Write-Output)(\s+(ok|true|готово))?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+    };
+
+    public static bool IsNoise(string command)
+    {
+        var text = (command ?? "").Trim();
+        if (text.Length == 0) return true;
+        foreach (var pattern in Noise)
+            if (pattern.IsMatch(text)) return true;
+        return Describe(text, null) == "жду немного";
+    }
+
+    /// One line per command: what it did, and only the output that says something.
+    public static string Line(string description, int exitCode, string? output)
+    {
+        if (exitCode != 0) return description + " · " + DescribeResult(exitCode, output);
+        var text = (output ?? "").Trim();
+        if (text.Length == 0 || LooksEncoded(text)) return description;
+        var single = Collapse(text);
+        if (single.Length == 0) return description;
+        if (single.Equals("ok", StringComparison.OrdinalIgnoreCase) ||
+            single.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+            single.Equals("готово", StringComparison.OrdinalIgnoreCase)) return description;
+        var brief = single.Length <= 60 ? single : single[..60] + "…";
+        return description + " · " + brief;
+    }
+
     /// Files and folders look better as bare names in a sentence.
     private static string Tail(string command, string noun)
     {
