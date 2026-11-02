@@ -107,10 +107,29 @@
         <Grid Grid.Column="2">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <TextBlock Grid.Row="0" Text="Логги" FontSize="12" Foreground="{StaticResource Dim}" Margin="4,0,0,8"/>
-          <Border Grid.Row="1" Background="{StaticResource Panel}" CornerRadius="10" Padding="6,8">
+
+          <!-- План работы: появляется только для задач из нескольких шагов. -->
+          <Border x:Name="PlanCard" Grid.Row="1" Background="{StaticResource Panel}" CornerRadius="10"
+                  Padding="10,8,10,9" Margin="0,0,0,8" Visibility="Collapsed">
+            <StackPanel>
+              <TextBlock x:Name="PlanHead" FontSize="12" Foreground="{StaticResource Text}" TextWrapping="Wrap"/>
+              <ItemsControl x:Name="PlanSteps" Margin="0,5,0,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding Text}" Foreground="{Binding Tone}"
+                               FontFamily="{StaticResource MonoFont}" FontSize="11.5"
+                               TextWrapping="Wrap" Margin="0,1,0,1"/>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Row="2" Background="{StaticResource Panel}" CornerRadius="10" Padding="6,8">
             <ScrollViewer x:Name="LogScroll" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled" Focusable="False">
               <ScrollViewer.Resources>

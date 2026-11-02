@@ -103,6 +103,35 @@ Because nothing is capped any more, two habits matter:
 * enormous output (a recursive `dir /s` over the whole disk) arrives in full and costs
   time and bandwidth — narrow the command instead (`-First 50`, `-TotalCount`).
 
+### The plan board — `POST /plan`
+
+For a task with several steps (installing something, setting up an app, a multi-part fix) the
+window shows a small board above the journal: a counter «2/4», the step running right now, and
+the whole list with ✓ / ● / ○ marks. Create it **before** you start doing the work, and say the
+same short list in the chat so the user sees both.
+
+```json
+{"title":"установка Python","current":0,
+ "steps":["проверяю, нет ли уже Python","ставлю через winget","проверяю версию и PATH","отчитываюсь о результате"]}
+→ {"visible":true,"counter":"0/4","headline":"установка Python · проверяю, нет ли уже Python",…}
+```
+
+After each step send the same call with `current` bumped — the board redraws in place, no new
+lines in the journal. When the last step is done, `current` equals the number of steps: the board
+shows «готово 4/4», colours itself green and disappears after ten seconds (a new plan replaces it
+immediately).
+
+Rules:
+
+* **3–6 steps, one line each**, in Russian, verb first: «проверяю…», «ставлю…», «проверяю…».
+  No goals, no filler — every item must be a concrete action with a checkable result.
+* Fewer than three steps → **no plan at all**. Creating a folder, opening a page, reading a
+  version: just do it and answer.
+* The user can ask for one explicitly: «с планом» — always create the board even for a short
+  job; «без плана» / «просто сделай» — do not create it at all, however long the task is.
+* Task changed or aborted → `POST /plan {"clear":true}` instead of leaving a half-finished board.
+* `GET /plan` returns the current board; nothing else to poll.
+
 ### Creating files and folders — do it once, correctly
 
 The classic failure: `mkdir "C:\\Users\\user\\Desktop\\папка\\"` returns exit code 1 with

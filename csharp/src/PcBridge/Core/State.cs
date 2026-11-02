@@ -8,6 +8,7 @@ public sealed class AppState
     public required Journal Journal { get; init; }
     public required Tunnel Tunnel { get; init; }
     public required Jobs Jobs { get; init; }
+    public PlanBoard Plan { get; } = new();
     public required string Key { get; init; }
     public string Hostname { get; } = Environment.MachineName;
     public string StartedAt { get; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -71,7 +72,7 @@ public sealed class AppState
 
     public JsonObject Snapshot() => new()
     {
-        ["version"] = "3.4.4",
+        ["version"] = "3.5.0",
         ["hostname"] = Hostname,
         ["port"] = Relay.Port,
         ["tunnel_url"] = Tunnel.Url,

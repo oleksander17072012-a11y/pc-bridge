@@ -18,7 +18,7 @@ public partial class App : Application
         };
 
         var journal = new Journal(Paths.LogFile);
-        journal.Push("boot", "PC-Bridge 3.4.4 стартует");
+        journal.Push("boot", "PC-Bridge 3.5.0 стартует");
 
         var key = LoadOrCreateKey();
         var jobs = new Jobs();

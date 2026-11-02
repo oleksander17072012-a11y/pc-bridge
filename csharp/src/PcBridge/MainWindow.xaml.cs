@@ -14,9 +14,16 @@ public sealed class LogRow
     public Brush Tone { get; init; } = Brushes.Gray;
 }
 
+public sealed class PlanRow
+{
+    public string Text { get; init; } = "";
+    public Brush Tone { get; init; } = Brushes.Gray;
+}
+
 public partial class MainWindow : Window
 {
     private readonly ObservableCollection<LogRow> _rows = new();
+    private readonly ObservableCollection<PlanRow> _planRows = new();
     private readonly DispatcherTimer _ticker;
     private readonly Brush _plain = Freeze("#C3C9D6");
     private readonly Brush _dim = Freeze("#7E8698");
@@ -35,6 +42,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         LogList.ItemsSource = _rows;
+        PlanSteps.ItemsSource = _planRows;
 
         // Fill from the journal that already exists, then follow new entries.
         foreach (var entry in App.State.Journal.Recent(80)) Append(entry);
@@ -47,13 +55,14 @@ public partial class MainWindow : Window
         });
 
         _ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
-        _ticker.Tick += (_, _) => Refresh();
+        _ticker.Tick += (_, _) => { Refresh(); RefreshPlan(); };
         _ticker.Start();
 
         Loaded += (_, _) =>
         {
             ApplyRounding();
             Refresh();
+            RefreshPlan();
         };
         SizeChanged += (_, _) => ApplyRounding();
     }
@@ -80,6 +89,42 @@ public partial class MainWindow : Window
         while (_rows.Count > 400) _rows.RemoveAt(0);
         // Scroll only after the new line has been measured, otherwise the offset lands past the end.
         Dispatcher.BeginInvoke(new Action(() => LogScroll.ScrollToEnd()), DispatcherPriority.Background);
+    }
+
+    /// Plan block above the journal: counter, the step running now, and the whole list.
+    /// It hides itself ten seconds after the last step, or the moment a new plan arrives.
+    private void RefreshPlan()
+    {
+        var plan = App.State.Plan;
+        if (plan.Expired())
+        {
+            plan.Clear();
+            _planRows.Clear();
+            PlanCard.Visibility = Visibility.Collapsed;
+            return;
+        }
+        if (!plan.Visible)
+        {
+            if (PlanCard.Visibility != Visibility.Collapsed)
+            {
+                _planRows.Clear();
+                PlanCard.Visibility = Visibility.Collapsed;
+            }
+            return;
+        }
+
+        PlanCard.Visibility = Visibility.Visible;
+        var finished = plan.Finished;
+        PlanHead.Text = finished ? $"{plan.Counter} · готово" : $"{plan.Counter} · {plan.Headline}";
+        PlanHead.Foreground = finished ? _ok : _plain;
+
+        _planRows.Clear();
+        foreach (var step in plan.Steps())
+        {
+            var mark = step.State switch { "done" => "✓ ", "current" => "● ", _ => "○ " };
+            var tone = step.State switch { "done" => _dim, "current" => _plain, _ => _dim };
+            _planRows.Add(new PlanRow { Text = mark + step.Text, Tone = tone });
+        }
     }
 
     private void Refresh()

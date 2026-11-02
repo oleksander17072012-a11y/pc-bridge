@@ -68,7 +68,7 @@ public static class Relay
 
             if (path == "/health")
             {
-                WriteJson(response, 200, new JsonObject { ["ok"] = true, ["service"] = "pc-bridge", ["version"] = "3.4.4" });
+                WriteJson(response, 200, new JsonObject { ["ok"] = true, ["service"] = "pc-bridge", ["version"] = "3.5.0" });
                 return;
             }
             if (!Authorized(request))
@@ -173,7 +173,7 @@ public static class Relay
         switch (path)
         {
             case "/ping":
-                return (200, new JsonObject { ["ok"] = true, ["version"] = "3.4.4", ["ms_since_start"] = state.UptimeSeconds * 1000 });
+                return (200, new JsonObject { ["ok"] = true, ["version"] = "3.5.0", ["ms_since_start"] = state.UptimeSeconds * 1000 });
 
             case "/status":
                 return (200, state.Snapshot());
@@ -224,6 +224,36 @@ public static class Relay
                 var answer = await Command(request, state);
                 var failed = answer["error"] is not null && (answer["exit_code"]?.GetValue<int>() ?? 0) == 400;
                 return (failed ? 400 : 200, answer);
+            }
+
+            // ---------- план работы: короткий список шагов над журналом ----------
+            case "/plan":
+            {
+                if (request.HttpMethod == "GET")
+                    return (200, state.Plan.Snapshot());
+
+                var body = await Body(request);
+                if (body?["clear"]?.GetValue<bool>() == true)
+                {
+                    state.Plan.Clear();
+                    return (200, new JsonObject { ["ok"] = true, ["visible"] = false });
+                }
+                var steps = (body?["steps"] as JsonArray)?
+                    .Select(node => node?.GetValue<string>() ?? "")
+                    .Where(text => text.Trim().Length > 0)
+                    .ToList();
+                if (steps is null || steps.Count == 0)
+                    return (400, new JsonObject
+                    {
+                        ["error"] = "нужен непустой steps",
+                        ["expected"] = "{\"steps\":[\"проверяю Python\",\"ставлю\",\"проверяю версию\"],\"current\":0,\"title\":\"установка Python\"}",
+                    });
+                var current = body["current"]?.GetValue<int>() ?? 0;
+                var title = Str(body, "title");
+                state.Plan.Set(steps!, current, title);
+                var snapshot = state.Plan.Snapshot();
+                state.Journal.Push("plan", $"план: {snapshot["counter"]} · {snapshot["steps"]!.AsArray().Count} шагов");
+                return (200, snapshot);
             }
 
             // ---------- UI Automation: нажать по имени, без курсора ----------
