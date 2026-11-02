@@ -68,7 +68,7 @@ public static class Relay
 
             if (path == "/health")
             {
-                WriteJson(response, 200, new JsonObject { ["ok"] = true, ["service"] = "pc-bridge", ["version"] = "3.0.0" });
+                WriteJson(response, 200, new JsonObject { ["ok"] = true, ["service"] = "pc-bridge", ["version"] = "3.1.2" });
                 return;
             }
             if (!Authorized(request))
@@ -173,7 +173,7 @@ public static class Relay
         switch (path)
         {
             case "/ping":
-                return (200, new JsonObject { ["ok"] = true, ["version"] = "3.0.0", ["ms_since_start"] = state.UptimeSeconds * 1000 });
+                return (200, new JsonObject { ["ok"] = true, ["version"] = "3.1.2", ["ms_since_start"] = state.UptimeSeconds * 1000 });
 
             case "/status":
                 return (200, state.Snapshot());
@@ -321,11 +321,11 @@ public static class Relay
             {
                 var body = await Body(request);
                 if (body?["ref"] is JsonValue refValue && refValue.TryGetValue<int>(out var reference))
-                    return await TryAsync(() => Browser.ClickRef(reference, Bool(body, "real"), body["page"]));
+                    return await TryAsync(() => Browser.ClickRef(reference, Bool(body, "real"), Bool(body, "focus"), body["page"]));
                 return await TryAsync(() => Browser.Click(
                     Str(body, "selector"),
                     body["x"]?.GetValue<double>(), body["y"]?.GetValue<double>(), body["page"],
-                    Bool(body, "real")));
+                    Bool(body, "real"), Bool(body, "focus")));
             }
 
             case "/browser/type":

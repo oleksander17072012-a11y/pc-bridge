@@ -295,6 +295,10 @@ POST /browser/navigate  {"page":"ABC…","url":"https://…"}
 * `click` by selector or ref uses a DOM click, so it works in background tabs; add
   `"real": true` for a real mouse event at those coordinates (needed when a page checks
   `isTrusted`).
+* Browser work does not leave the user's window raised: a click may briefly wake a minimised
+  window (Chrome only delivers real mouse input to a visible tab) and the bridge puts it back
+  minimised, with the previous window back in front. Add `"focus": true` only when the user
+  really must see the page on screen — then the window stays in front.
 * `eval` is the power tool: `document.querySelectorAll('.row').length`, reading a table,
   filling a form, checking `location.href` after a redirect. One `eval` replaces ten clicks.
 * The page's own CSP can block inline handlers you inject — that is the site's rule, not

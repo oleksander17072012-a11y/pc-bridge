@@ -516,6 +516,11 @@ public static class Browser
             "--remote-allow-origins=*",
             "--no-first-run",
             "--no-default-browser-check",
+            // The window stays minimised or behind others: without these Chrome throttles
+            // timers, drops rendering and can ignore synthesized input in that state.
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
+            "--disable-background-timer-throttling",
         };
 
         if (userProfile)
@@ -784,8 +789,36 @@ public static class Browser
         "(() => { const n = window.__pcb && window.__pcb.nodes && window.__pcb.nodes[" + refName + "];" +
         " if (!n) return 'no-ref'; n.scrollIntoView({block:'center', inline:'center'}); " + action + " return 'ok'; })()";
 
+    /// Real mouse input reaches Chrome only when the tab is visible, so a hidden tab has to
+    /// be activated first. The window is then put back: minimised again, previous window in
+    /// front — the user never finds the browser raised because of a click.
+    private static async Task RealClickAsync(Page page, double x, double y, bool focus)
+    {
+        var hidden = (await page.Evaluate("document.visibilityState"))["value"]?.GetValue<string>() == "hidden";
+        var (window, minimized) = Win32.BrowserWindow();
+        var previous = Win32.Foreground();
+        if (hidden || focus) try { await page.Send("Page.bringToFront"); } catch { }
+
+        await page.Send("Input.dispatchMouseEvent", new JsonObject
+        {
+            ["type"] = "mouseMoved", ["x"] = x, ["y"] = y, ["button"] = "none", ["buttons"] = 0,
+        });
+        foreach (var (type, buttons) in new[] { ("mousePressed", 1), ("mouseReleased", 0) })
+            await page.Send("Input.dispatchMouseEvent", new JsonObject
+            {
+                ["type"] = type, ["x"] = x, ["y"] = y, ["button"] = "left", ["buttons"] = buttons, ["clickCount"] = 1,
+            });
+
+        if (!focus && hidden)
+        {
+            await Task.Delay(150); // Chrome needs the frame that carries the click
+            if (minimized) Win32.Minimize(window);
+            else if (previous != IntPtr.Zero && previous != window) Win32.Focus(previous);
+        }
+    }
+
     /// A real mouse click is sometimes required (canvas widgets, buttons that check isTrusted).
-    public static async Task<JsonNode> ClickRef(int reference, bool real, JsonNode? pageSelector)
+    public static async Task<JsonNode> ClickRef(int reference, bool real, bool focus, JsonNode? pageSelector)
     {
         var page = await PickAsync(pageSelector);
         if (!real)
@@ -804,15 +837,9 @@ public static class Browser
         if (rect["value"] is not JsonObject point)
             return new JsonObject { ["ok"] = false, ["exit_code"] = 404, ["error"] = "нет такого ref — сделайте /browser/snapshot" };
 
-        try { await page.Send("Page.bringToFront"); } catch { }
         var x = point["x"]!.GetValue<double>();
         var y = point["y"]!.GetValue<double>();
-        await page.Send("Input.dispatchMouseEvent", new JsonObject { ["type"] = "mouseMoved", ["x"] = x, ["y"] = y, ["button"] = "none", ["buttons"] = 0 });
-        foreach (var (type, buttons) in new[] { ("mousePressed", 1), ("mouseReleased", 0) })
-            await page.Send("Input.dispatchMouseEvent", new JsonObject
-            {
-                ["type"] = type, ["x"] = x, ["y"] = y, ["button"] = "left", ["buttons"] = buttons, ["clickCount"] = 1,
-            });
+        await RealClickAsync(page, x, y, focus);
         return new JsonObject { ["ok"] = true, ["via"] = "mouse", ["ref"] = reference, ["x"] = x, ["y"] = y };
     }
 
@@ -868,10 +895,9 @@ public static class Browser
         };
     }
 
-    public static async Task<JsonNode> Click(string? selector, double? x, double? y, JsonNode? pageSelector, bool real)
+    public static async Task<JsonNode> Click(string? selector, double? x, double? y, JsonNode? pageSelector, bool real, bool focus)
     {
         var page = await PickAsync(pageSelector);
-        try { await page.Send("Page.bringToFront"); } catch { }
 
         // By selector the DOM click is used: it works in background tabs, where Chrome
         // ignores synthesized mouse input. Coordinates always mean a real mouse event.
@@ -907,27 +933,7 @@ public static class Browser
         }
 
         // Chrome ignores a press without the buttons bitmask, and a click without a move first.
-        await page.Send("Input.dispatchMouseEvent", new JsonObject
-        {
-            ["type"] = "mouseMoved",
-            ["x"] = clickX,
-            ["y"] = clickY,
-            ["button"] = "none",
-            ["buttons"] = 0,
-        });
-
-        foreach (var (type, buttons) in new[] { ("mousePressed", 1), ("mouseReleased", 0) })
-        {
-            await page.Send("Input.dispatchMouseEvent", new JsonObject
-            {
-                ["type"] = type,
-                ["x"] = clickX,
-                ["y"] = clickY,
-                ["button"] = "left",
-                ["buttons"] = buttons,
-                ["clickCount"] = 1,
-            });
-        }
+        await RealClickAsync(page, clickX, clickY, focus);
         return new JsonObject { ["ok"] = true, ["via"] = "mouse", ["x"] = clickX, ["y"] = clickY };
     }
 

@@ -125,6 +125,9 @@ public static class Win32
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern int GetWindowThreadProcessId(IntPtr hwnd, out int pid);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
     [DllImport("user32.dll")] private static extern bool SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, int dx, int dy, uint data, IntPtr extra);
@@ -150,6 +153,43 @@ public static class Win32
             return result.Count < 120;
         }, IntPtr.Zero);
         return result;
+    }
+
+    /// The browser window we are driving. Chrome delivers real mouse input only to a visible
+    /// tab, so we sometimes have to raise the window — and put it back the way it was after.
+    public static (IntPtr Hwnd, bool Minimized) BrowserWindow()
+    {
+        IntPtr first = IntPtr.Zero, shown = IntPtr.Zero;
+        EnumWindows((hwnd, _) =>
+        {
+            // Chrome owns plenty of hidden helper windows; only the real frame has a title.
+            if (!IsWindowVisible(hwnd)) return true;
+            var title = new System.Text.StringBuilder(256);
+            GetWindowTextW(hwnd, title, title.Capacity);
+            if (title.Length == 0) return true;
+            GetWindowThreadProcessId(hwnd, out var pid);
+            string process;
+            try { process = Process.GetProcessById(pid).ProcessName; } catch { return true; }
+            if (!process.Equals("chrome", StringComparison.OrdinalIgnoreCase) &&
+                !process.Equals("msedge", StringComparison.OrdinalIgnoreCase)) return true;
+            if (first == IntPtr.Zero) first = hwnd;
+            if (!IsIconic(hwnd)) { shown = hwnd; return false; }
+            return true;
+        }, IntPtr.Zero);
+        var chosen = shown != IntPtr.Zero ? shown : first;
+        return (chosen, chosen != IntPtr.Zero && IsIconic(chosen));
+    }
+
+    public static IntPtr Foreground() => GetForegroundWindow();
+
+    public static void Minimize(IntPtr hwnd)
+    {
+        if (hwnd != IntPtr.Zero) ShowWindow(hwnd, 6); // SW_MINIMIZE
+    }
+
+    public static void Focus(IntPtr hwnd)
+    {
+        if (hwnd != IntPtr.Zero) SetForegroundWindow(hwnd);
     }
 
     public static WindowInfo ActiveWindow()
