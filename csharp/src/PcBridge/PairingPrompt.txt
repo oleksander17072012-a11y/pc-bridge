@@ -103,6 +103,33 @@ Because nothing is capped any more, two habits matter:
 * enormous output (a recursive `dir /s` over the whole disk) arrives in full and costs
   time and bandwidth — narrow the command instead (`-First 50`, `-TotalCount`).
 
+### Creating files and folders — do it once, correctly
+
+The classic failure: `mkdir "C:\\Users\\user\\Desktop\\папка\\"` returns exit code 1 with
+«Синтаксическая ошибка в имени файла, имени папки или метке тома». Inside quotes a trailing
+backslash escapes the quote, so `cmd` sees a broken path. Nothing gets created, and a blind
+retry wastes a round trip.
+
+Rules:
+
+* **Create with PowerShell, not `cmd`**, single quotes, no trailing backslash:
+
+  ```json
+  {"command":"New-Item -ItemType Directory -LiteralPath 'C:\\Users\\user\\Desktop\\папка' -Force | Out-Null; Test-Path -LiteralPath 'C:\\Users\\user\\Desktop\\папка'","shell":"powershell"}
+  ```
+
+  `-LiteralPath` is essential: `-Path` treats `[ ]` and `*` in a folder name as wildcards.
+* If you do use `cmd`, write `mkdir "C:\\path\\to\\folder"` — never end the quoted path with
+  `\`, and never nest quotes inside quotes.
+* **Verify in the same call** (`Test-Path`) or in the next one — do not report a folder as
+  created without a check. `New-Item` with `-Force` on an existing folder is a no-op, so
+  re-running is safe.
+* After exit code 1 with «Синтаксическая ошибка» or `The syntax of the filename…`, do **not**
+  repeat the same command. The cause is quoting, so switch to the PowerShell form above.
+* File names with Cyrillic, spaces or brackets: always quote them, always `-LiteralPath`.
+* Renaming, moving, deleting: `Rename-Item -LiteralPath`, `Move-Item -LiteralPath`,
+  `Remove-Item -LiteralPath` for the same reason.
+
 ### Long jobs: `background` + `/job/{id}`
 
 Cloudflare cuts a request at about 100 seconds. A build, an installer or a game download
