@@ -105,10 +105,84 @@ public partial class MainWindow : Window
 
     // ---------- actions ----------
     private void Copy_Click(object sender, RoutedEventArgs e)
-        => Copy(App.State.PairingBundle(), "скопировано: ключ + промпт");
+        => Copy(App.State.PairingBlock(), "блок доступа скопирован");
 
-    private void CopyKey_Click(object sender, RoutedEventArgs e)
-        => Copy(App.State.PairingBlock(), "скопирован блок ключа");
+    /// Промпт остаётся под рукой, но больше не занимает главную кнопку.
+    private void Prompt_Click(object sender, RoutedEventArgs e)
+    {
+        var body = Prompt.Body;
+        if (body.Length == 0)
+        {
+            App.State.Journal.Push("error", "промпт пуст: не вшит в сборку");
+            return;
+        }
+        Copy(body, $"промпт скопирован ({body.Length / 1000.0:0.0} тыс. знаков)");
+    }
+
+    private void Data_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { Paths.DataDir }, UseShellExecute = true });
+            App.State.Journal.Push("ui", "открыта папка данных");
+        }
+        catch (Exception error)
+        {
+            App.State.Journal.Push("error", "проводник не открылся: " + error.Message);
+        }
+    }
+
+    private void Log_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (!File.Exists(Paths.LogFile)) File.WriteAllText(Paths.LogFile, "");
+            Process.Start(new ProcessStartInfo(Paths.LogFile) { UseShellExecute = true });
+            App.State.Journal.Push("ui", "журнал открыт в блокноте");
+        }
+        catch (Exception error)
+        {
+            App.State.Journal.Push("error", "журнал не открылся: " + error.Message);
+        }
+    }
+
+    /// Локальная проверка: релей отвечает по своему порту, туннель поднят, браузерный мост виден.
+    private async void Check_Click(object sender, RoutedEventArgs e)
+    {
+        var state = App.State;
+        App.State.Journal.Push("step", "проверяю связь");
+        CheckButton.IsEnabled = false;
+        try
+        {
+            using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
+            client.DefaultRequestHeaders.Add("Authorization", "Bearer " + state.Key);
+            var answer = await client.GetStringAsync($"http://127.0.0.1:{Relay.Port}/ping");
+            var ok = answer.Contains("\"ok\":true", StringComparison.OrdinalIgnoreCase);
+            state.Journal.Push(ok ? "result" : "error", ok
+                ? $"релей отвечает на 127.0.0.1:{Relay.Port}"
+                : "релей ответил неожиданно: " + Trim(answer, (int)120));
+        }
+        catch (Exception error)
+        {
+            state.Journal.Push("error", "релей не отвечает: " + error.Message);
+        }
+
+        var url = state.Tunnel.Url;
+        state.Journal.Push(url is null ? "error" : "result", url is null
+            ? "туннеля нет — нажмите «Новый туннель»"
+            : "туннель: " + url);
+
+        var cloudflared = Process.GetProcesses().Any(p =>
+        {
+            try { return p.ProcessName.Contains("cloudflared", StringComparison.OrdinalIgnoreCase); }
+            catch { return false; }
+        });
+        state.Journal.Push(cloudflared ? "result" : "error", cloudflared
+            ? "cloudflared запущен"
+            : "cloudflared не найден — «Новый туннель» перезапустит его");
+
+        CheckButton.IsEnabled = true;
+    }
 
     private void Copy(string text, string message)
     {
@@ -122,6 +196,9 @@ public partial class MainWindow : Window
             App.State.Journal.Push("error", "буфер обмена занят: " + error.Message);
         }
     }
+
+    private static string Trim(string text, int limit)
+        => text.Length <= limit ? text : text[..limit] + "…";
 
     private void Tunnel_Click(object sender, RoutedEventArgs e) => App.State.Tunnel.Restart();
 
