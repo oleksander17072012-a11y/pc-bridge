@@ -11,7 +11,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>pc-bridge</AssemblyName>
     <RootNamespace>PcBridge</RootNamespace>
-    <Version>3.3.1</Version>
+    <Version>3.4.0</Version>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
@@ -27,6 +27,8 @@
   <ItemGroup>
     <!-- The instructions travel inside the exe, so one click pastes key + prompt. -->
     <EmbeddedResource Include="PairingPrompt.txt" LogicalName="PcBridge.PairingPrompt.txt"/>
+    <!-- Same file as ApplicationIcon: the window (taskbar, alt-tab) takes it from here. -->
+    <Resource Include="icon.ico"/>
   </ItemGroup>
 
 </Project>
