@@ -274,6 +274,8 @@ Then, in one workflow:
 
 ```json
 POST /browser/open      {"url":"https://site/page"}     → {"id":"ABC…"}
+POST /browser/snapshot  {"page":"ABC…","filter":"","limit":60}
+                        → [{"ref":19,"tag":"button","name":"Start server","x":704,"y":405},…]
 POST /browser/text      {"page":"ABC…"}                 → page text, no screenshot needed
 POST /browser/eval      {"page":"ABC…","expression":"document.title"}
 POST /browser/wait      {"page":"ABC…","selector":"#result","timeout":20}
@@ -286,8 +288,13 @@ POST /browser/navigate  {"page":"ABC…","url":"https://…"}
 
 * `page` is optional; without it the first tab is used. Pass the `id` from `/browser/open`
   or any part of the URL (`{"page":"site/page"}`) when several tabs are open.
-* `click` by selector uses a DOM click, so it works in background tabs; add `"real": true`
-  or give `x`/`y` to send a real mouse event instead.
+* **Start with `/browser/snapshot`, not with a screenshot.** It returns every button, link and
+  field with a `ref` number, a name and a position — a few hundred bytes of text instead of a
+  picture. Then act by number: `{"ref":19}` in `click`/`type`. A screenshot costs a whole
+  image and still leaves you guessing; the snapshot is exact.
+* `click` by selector or ref uses a DOM click, so it works in background tabs; add
+  `"real": true` for a real mouse event at those coordinates (needed when a page checks
+  `isTrusted`).
 * `eval` is the power tool: `document.querySelectorAll('.row').length`, reading a table,
   filling a form, checking `location.href` after a redirect. One `eval` replaces ten clicks.
 * The page's own CSP can block inline handlers you inject — that is the site's rule, not

@@ -283,6 +283,16 @@ public static class Relay
                 return await TryAsync(() => Browser.Open(url, Bool(body, "background")));
             }
 
+            // ---------- структурный снимок вместо скриншота ----------
+            case "/browser/snapshot":
+            {
+                var body = await Body(request);
+                return await TryAsync(() => Browser.Snapshot(
+                    Str(body, "filter") ?? Query(query, "filter"),
+                    Int(body, "limit", 60),
+                    body["page"] ?? UrlSelector(query)));
+            }
+
             case "/browser/close":
             {
                 var body = await Body(request);
@@ -310,6 +320,8 @@ public static class Relay
             case "/browser/click":
             {
                 var body = await Body(request);
+                if (body?["ref"] is JsonValue refValue && refValue.TryGetValue<int>(out var reference))
+                    return await TryAsync(() => Browser.ClickRef(reference, Bool(body, "real"), body["page"]));
                 return await TryAsync(() => Browser.Click(
                     Str(body, "selector"),
                     body["x"]?.GetValue<double>(), body["y"]?.GetValue<double>(), body["page"],
@@ -319,6 +331,8 @@ public static class Relay
             case "/browser/type":
             {
                 var body = await Body(request);
+                if (body?["ref"] is JsonValue textRef && textRef.TryGetValue<int>(out var refIndex))
+                    return await TryAsync(() => Browser.TypeRef(refIndex, Str(body, "text") ?? "", Bool(body, "replace"), body["page"]));
                 return await TryAsync(() => Browser.Type(Str(body, "selector"), Str(body, "text") ?? "", Bool(body, "replace"), body["page"]));
             }
 

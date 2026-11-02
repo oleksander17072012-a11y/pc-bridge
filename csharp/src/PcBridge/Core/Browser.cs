@@ -713,6 +713,120 @@ public static class Browser
         return new JsonObject { ["ok"] = false, ["exit_code"] = 124, ["error"] = "страница не появилась" };
     }
 
+    /// Compact outline of everything a human can act on: index, role, name, position.
+    /// Far cheaper and more reliable than a screenshot, and it gives refs to act on.
+    private const string SnapshotScript = @"(() => {
+  const sel = 'a[href],button,input:not([type=hidden]),select,textarea,[role=button],[role=link],[role=tab],[role=checkbox],[role=switch],[role=menuitem],[onclick],[tabindex]:not([tabindex=""-1""])';
+  const all = [...document.querySelectorAll(sel)];
+  const live = all.filter(e => {
+    const r = e.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const st = getComputedStyle(e);
+    if (st.visibility === 'hidden' || st.display === 'none' || st.opacity === '0') return false;
+    if (e.disabled) return false;
+    return true;
+  });
+  live.forEach((e, i) => { e.setAttribute('data-pcb', String(i)); });
+  window.__pcb = window.__pcb || {};
+  window.__pcb.nodes = live;
+  return live.map((e, i) => {
+    const r = e.getBoundingClientRect();
+    const raw = e.getAttribute('aria-label') || e.getAttribute('title') || e.getAttribute('placeholder')
+      || (e.tagName === 'INPUT' ? (e.value || '') : '') || e.innerText || e.name || '';
+    const name = raw.replace(/\s+/g, ' ').trim().slice(0, 80);
+    const tag = e.tagName.toLowerCase();
+    return {
+      ref: i,
+      tag: tag,
+      role: e.getAttribute('role') || (tag === 'a' ? 'link' : tag === 'button' ? 'button' : ''),
+      type: e.type || '',
+      name: name,
+      href: (e.getAttribute('href') || '').slice(0, 70),
+      x: Math.round(r.left + r.width / 2),
+      y: Math.round(r.top + r.height / 2),
+    };
+  });
+})()";
+
+    public static async Task<JsonNode> Snapshot(string? filter, int limit, JsonNode? pageSelector)
+    {
+        var page = await PickAsync(pageSelector);
+        var result = await page.Evaluate(SnapshotScript, 120);
+        var items = new JsonArray();
+        var total = 0;
+        if (result["value"] is JsonArray list)
+        {
+            foreach (var item in list.OfType<JsonObject>())
+            {
+                var name = item["name"]?.GetValue<string>() ?? "";
+                if (!string.IsNullOrWhiteSpace(filter) &&
+                    !name.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
+                total++;
+                if (items.Count >= Math.Clamp(limit, 1, 300)) continue;
+                items.Add(item.DeepClone());
+            }
+        }
+
+        var title = await page.Evaluate("document.title");
+        return new JsonObject
+        {
+            ["ok"] = true,
+            ["url"] = page.Url,
+            ["title"] = title["value"]?.GetValue<string>(),
+            ["count"] = total,
+            ["shown"] = items.Count,
+            ["elements"] = items,
+            ["hint"] = "действуйте по ref: /browser/click {\"ref\":3} или /browser/type {\"ref\":5,\"text\":\"…\"}",
+        };
+    }
+
+    private static string RefScript(string refName, string action) =>
+        "(() => { const n = window.__pcb && window.__pcb.nodes && window.__pcb.nodes[" + refName + "];" +
+        " if (!n) return 'no-ref'; n.scrollIntoView({block:'center', inline:'center'}); " + action + " return 'ok'; })()";
+
+    /// A real mouse click is sometimes required (canvas widgets, buttons that check isTrusted).
+    public static async Task<JsonNode> ClickRef(int reference, bool real, JsonNode? pageSelector)
+    {
+        var page = await PickAsync(pageSelector);
+        if (!real)
+        {
+            var answer = await page.Evaluate(RefScript(reference.ToString(), "n.click();"));
+            var state = answer["value"]?.GetValue<string>() ?? "";
+            if (state == "no-ref")
+                return new JsonObject { ["ok"] = false, ["exit_code"] = 404, ["error"] = "нет такого ref — сделайте /browser/snapshot" };
+            return new JsonObject { ["ok"] = true, ["via"] = "dom", ["ref"] = reference };
+        }
+
+        var rect = await page.Evaluate(
+            "(() => { const n = window.__pcb && window.__pcb.nodes && window.__pcb.nodes[" + reference + "];" +
+            " if (!n) return null; n.scrollIntoView({block:'center'}); const r = n.getBoundingClientRect();" +
+            " return {x: r.left + r.width/2, y: r.top + r.height/2}; })()");
+        if (rect["value"] is not JsonObject point)
+            return new JsonObject { ["ok"] = false, ["exit_code"] = 404, ["error"] = "нет такого ref — сделайте /browser/snapshot" };
+
+        try { await page.Send("Page.bringToFront"); } catch { }
+        var x = point["x"]!.GetValue<double>();
+        var y = point["y"]!.GetValue<double>();
+        await page.Send("Input.dispatchMouseEvent", new JsonObject { ["type"] = "mouseMoved", ["x"] = x, ["y"] = y, ["button"] = "none", ["buttons"] = 0 });
+        foreach (var (type, buttons) in new[] { ("mousePressed", 1), ("mouseReleased", 0) })
+            await page.Send("Input.dispatchMouseEvent", new JsonObject
+            {
+                ["type"] = type, ["x"] = x, ["y"] = y, ["button"] = "left", ["buttons"] = buttons, ["clickCount"] = 1,
+            });
+        return new JsonObject { ["ok"] = true, ["via"] = "mouse", ["ref"] = reference, ["x"] = x, ["y"] = y };
+    }
+
+    public static async Task<JsonNode> TypeRef(int reference, string text, bool replace, JsonNode? pageSelector)
+    {
+        var page = await PickAsync(pageSelector);
+        var answer = await page.Evaluate(RefScript(reference.ToString(),
+            "n.focus(); if (" + (replace ? "true" : "false") + " && 'value' in n) { n.value = ''; }"));
+        if (answer["value"]?.GetValue<string>() == "no-ref")
+            return new JsonObject { ["ok"] = false, ["exit_code"] = 404, ["error"] = "нет такого ref — сделайте /browser/snapshot" };
+        await page.Send("Input.insertText", new JsonObject { ["text"] = text });
+        return new JsonObject { ["ok"] = true, ["ref"] = reference, ["typed"] = text.Length };
+    }
+
     /// Closes a tab by id — only the ones you opened yourself.
     public static async Task<JsonNode> Close(string targetId)
     {
