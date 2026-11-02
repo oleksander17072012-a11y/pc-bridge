@@ -262,7 +262,9 @@ public static class Relay
                 var body = await Body(request);
                 return await TryAsync(() => Browser.Start(
                     QueryInt(query, "port", Int(body, "port", 9333)),
-                    Bool(body, "headless"), Bool(body, "user_profile"), Str(body, "browser") ?? "chrome"));
+                    Bool(body, "headless"), Bool(body, "user_profile"), Str(body, "browser") ?? "chrome",
+                    Bool(body, "restart"),
+                    (body["extensions"] as JsonArray)?.Select(e => e?.GetValue<string>() ?? "").Where(e => e.Length > 0).ToArray()));
             }
 
             case "/browser/status":
@@ -270,6 +272,9 @@ public static class Relay
 
             case "/browser/pages":
                 return await TryAsync(Browser.ListPages);
+
+            case "/browser/targets":
+                return await TryAsync(Browser.AllTargets);
 
             case "/browser/open":
             {

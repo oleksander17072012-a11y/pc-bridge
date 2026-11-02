@@ -123,31 +123,108 @@ public static class Browser
     /// is called "dead".
     private static async Task<bool> LooksLikeDevTools(string baseUrl)
     {
+        // A probe must be cheap: a dead port has to answer "no" in a fraction of a second,
+        // otherwise /browser/status can hang for minutes and the tunnel drops the request.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(700));
         try
         {
-            using var response = await Http.GetAsync(baseUrl + "/json/version");
+            using var response = await Http.GetAsync(baseUrl + "/json/version", timeout.Token);
             if (!response.IsSuccessStatusCode) return false;
-            var text = await response.Content.ReadAsStringAsync();
+            var text = await response.Content.ReadAsStringAsync(timeout.Token);
             return text.Contains("webSocketDebuggerUrl", StringComparison.OrdinalIgnoreCase);
         }
         catch { return false; }
     }
 
+    private static DateTime _noEndpointUntil = DateTime.MinValue;
+    private static readonly List<int> KnownPorts = LoadPorts();
+
+    private static string PortFile => Path.Combine(Paths.DataDir, "browser-port.txt");
+
+    private static List<int> LoadPorts()
+    {
+        var ports = new List<int> { 9333 };
+        try
+        {
+            if (File.Exists(PortFile) && int.TryParse(File.ReadAllText(PortFile).Trim(), out var saved) &&
+                saved > 1024 && !ports.Contains(saved)) ports.Insert(0, saved);
+        }
+        catch { }
+        return ports;
+    }
+
+    private static void SavePort(int port)
+    {
+        try { File.WriteAllText(PortFile, port.ToString()); } catch { }
+    }
+
     private static async Task<string?> ResolveBase(bool rescan = false)
     {
         if (_base is not null && !rescan) return _base;
-        for (var port = 9333; port <= 9345; port++)
+        // Nothing answered a moment ago: do not make every request pay for the scan again.
+        if (!rescan && DateTime.UtcNow < _noEndpointUntil) return null;
+
+        foreach (var port in KnownPorts.Distinct().ToList())
         {
             foreach (var host in new[] { "127.0.0.1", "[::1]" })
             {
+                // A TCP check first: an HTTP connect to a dead port can hang for a second
+                // on Windows, and scanning 13 ports twice would cost the caller 17 s.
+                if (!await Accepts(host.Trim('[', ']'), port)) continue;
                 var candidate = $"http://{host}:{port}";
                 if (await LooksLikeDevTools(candidate))
                 {
                     _base = candidate;
                     _port = port;
+                    if (!KnownPorts.Contains(port)) KnownPorts.Insert(0, port);
+                    SavePort(port);
+                    _noEndpointUntil = DateTime.MinValue;
                     return _base;
                 }
             }
+        }
+
+        // Last resort: ask the running browser processes which port they opened. This is how
+        // the bridge re-attaches after its own restart, when nothing remembered the port.
+        if (DiscoverPort() is { } discovered)
+        {
+            foreach (var host in new[] { "127.0.0.1", "[::1]" })
+            {
+                var candidate = $"http://{host}:{discovered}";
+                if (!await LooksLikeDevTools(candidate)) continue;
+                _base = candidate;
+                _port = discovered;
+                SavePort(discovered);
+                if (!KnownPorts.Contains(discovered)) KnownPorts.Insert(0, discovered);
+                return _base;
+            }
+        }
+
+        _noEndpointUntil = DateTime.UtcNow.AddSeconds(20);
+        return null;
+    }
+
+    private static async Task<bool> Accepts(string host, int port)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        try
+        {
+            using var client = new System.Net.Sockets.TcpClient();
+            await client.ConnectAsync(host, port, timeout.Token);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private static int? DiscoverPort()
+    {
+        var pids = RunPidsRaw("Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | " +
+                              "Where-Object { $_.CommandLine -like '*--remote-debugging-port=*' -and $_.CommandLine -like '*PC-Bridge*' } | " +
+                              "ForEach-Object { $_.CommandLine }");
+        foreach (var line in pids)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(line, @"--remote-debugging-port=(\d{2,5})");
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var port)) return port;
         }
         return null;
     }
@@ -252,21 +329,173 @@ public static class Browser
         return null;
     }
 
-    public static async Task<JsonNode> Start(int port, bool headless, bool userProfile, string kind)
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr hwnd, int message, IntPtr w, IntPtr l);
+
+    private static string ProcessName(string kind) => kind == "edge" ? "msedge" : "chrome";
+
+    /// Where the browser keeps the real profile the user is signed in to.
+    private static string UserDataDir(string kind) => kind == "edge"
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Edge", "User Data")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "User Data");
+
+    /// Chrome 136+ refuses to open the debug port when --user-data-dir points at the default
+    /// profile, so the same folder is reached through a junction: a different path, the same
+    /// logins, bookmarks and extensions.
+    private static string JunctionPath(string kind) =>
+        Path.Combine(Paths.DataDir, kind == "edge" ? "edge-user" : "chrome-user");
+
+    private static string? EnsureJunction(string link, string target)
+    {
+        if (Directory.Exists(link)) return null;
+        if (!Directory.Exists(target)) return "профиль не найден: " + target;
+
+        // cmd does not understand backslash-escaped quotes, so the whole tail is passed as
+        // one argument string instead of ArgumentList.
+        var info = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardError = true,
+        };
+        info.Arguments = "/c mklink /J \"" + link + "\" \"" + target + "\"";
+
+        using var process = System.Diagnostics.Process.Start(info) ?? throw new InvalidOperationException("mklink не запустился");
+        var error = ConsoleText.Decode(process.StandardError.BaseStream is { } stream
+            ? ReadAll(stream)
+            : Array.Empty<byte>());
+        process.WaitForExit(15000);
+        return Directory.Exists(link) ? null : "не удалось создать junction: " + error.Trim();
+    }
+
+    private static byte[] ReadAll(Stream stream)
+    {
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
+    private static bool IsRunning(string kind) =>
+        System.Diagnostics.Process.GetProcessesByName(ProcessName(kind)).Length > 0;
+
+    /// Asks the running browser to close the way a click on ✕ does, giving it time to save
+    /// the session, instead of killing it.
+    private static bool CloseGracefully(string kind, int waitSeconds)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(waitSeconds);
+        foreach (var process in System.Diagnostics.Process.GetProcessesByName(ProcessName(kind)))
+        {
+            try { if (process.MainWindowHandle != IntPtr.Zero) PostMessage(process.MainWindowHandle, 0x0010 /*WM_CLOSE*/, IntPtr.Zero, IntPtr.Zero); }
+            catch { }
+        }
+        while (DateTime.UtcNow < deadline)
+        {
+            if (!IsRunning(kind)) return true;
+            Thread.Sleep(300);
+        }
+        return !IsRunning(kind);
+    }
+
+    private static string ModeFile => Path.Combine(Paths.DataDir, "browser-mode.txt");
+
+    /// Which profile the browser on the debug port belongs to: "bridge" or "user".
+    private static string? CurrentMode()
+    {
+        try { return File.Exists(ModeFile) ? File.ReadAllText(ModeFile).Trim() : null; }
+        catch { return null; }
+    }
+
+    private static void RememberMode(string mode)
+    {
+        try { File.WriteAllText(ModeFile, mode); } catch { }
+    }
+
+    /// Only processes started with a given --user-data-dir: the user's own browser and ours
+    /// are both "chrome.exe", so the command line is the only honest way to tell them apart.
+    /// Every browser process except the ones started by the bridge. A normally started
+    /// Chrome has no --user-data-dir at all, so matching on "User Data" misses it.
+    private static List<int> FindUserBrowser(string kind) =>
+        RunPids("Get-CimInstance Win32_Process -Filter \"Name='" + ProcessName(kind) + ".exe'\" | " +
+                "Where-Object { $_.CommandLine -notlike '*PC-Bridge*' } | " +
+                "ForEach-Object { $_.ProcessId }");
+
+    private static List<int> FindByProfile(string kind, string needle) =>
+        RunPids("Get-CimInstance Win32_Process -Filter \"Name='" + ProcessName(kind) + ".exe'\" | " +
+                "Where-Object { $_.CommandLine -like '*" + needle + "*' } | " +
+                "ForEach-Object { $_.ProcessId }");
+
+    private static List<int> RunPids(string script) =>
+        RunPidsRaw(script).Select(line => int.TryParse(line.Trim(), out var pid) ? pid : 0)
+            .Where(pid => pid > 0).Distinct().ToList();
+
+    private static List<string> RunPidsRaw(string script)
+    {
+        var info = new System.Diagnostics.ProcessStartInfo("powershell")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        info.ArgumentList.Add("-NoProfile");
+        info.ArgumentList.Add("-Command");
+        info.ArgumentList.Add(script);
+        using var process = System.Diagnostics.Process.Start(info);
+        if (process is null) return new List<string>();
+        var output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit(20000);
+        return output.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+    }
+
+    private static bool ClosePids(IEnumerable<int> pids, int waitSeconds)
+    {
+        var list = pids.ToList();
+        foreach (var pid in list)
+        {
+            try { System.Diagnostics.Process.GetProcessById(pid).CloseMainWindow(); } catch { }
+        }
+        var deadline = DateTime.UtcNow.AddSeconds(waitSeconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            var alive = list.Where(pid => { try { System.Diagnostics.Process.GetProcessById(pid); return true; } catch { return false; } }).ToList();
+            if (alive.Count == 0) return true;
+            Thread.Sleep(300);
+        }
+        foreach (var pid in list)
+        {
+            try { System.Diagnostics.Process.GetProcessById(pid).Kill(); } catch { }
+        }
+        Thread.Sleep(500);
+        return true;
+    }
+
+    public static async Task<JsonNode> Start(int port, bool headless, bool userProfile, string kind, bool restart, string[]? extensions)
     {
         _port = port is > 1024 and < 65535 ? port : 9333;
 
+        var wantedMode = userProfile ? "user" : "bridge";
+
         if (await ResolveBase(rescan: true) is { } existing)
         {
-            var version = JsonNode.Parse(await HttpText("/json/version") ?? "{}") as JsonObject;
-            return new JsonObject
+            if (CurrentMode() == wantedMode)
             {
-                ["ok"] = true,
-                ["already_running"] = true,
-                ["port"] = _port,
-                ["endpoint"] = existing,
-                ["browser"] = version?["Browser"]?.GetValue<string>(),
-            };
+                var version = JsonNode.Parse(await HttpText("/json/version") ?? "{}") as JsonObject;
+                return new JsonObject
+                {
+                    ["ok"] = true,
+                    ["already_running"] = true,
+                    ["port"] = _port,
+                    ["endpoint"] = existing,
+                    ["profile"] = wantedMode == "user" ? "ваш" : "отдельный",
+                    ["browser"] = version?["Browser"]?.GetValue<string>(),
+                };
+            }
+
+            // An automation browser from the other mode is holding the port; it is ours to close.
+            var others = FindByProfile(kind, "PC-Bridge");
+            if (others.Count > 0) ClosePids(others, 10);
+            _base = null;
+            await Task.Delay(700);
         }
 
         var exe = FindExecutable(kind);
@@ -279,6 +508,7 @@ public static class Browser
         if (chosen == 0)
             return new JsonObject { ["ok"] = false, ["exit_code"] = 1, ["error"] = "нет свободного порта рядом с " + _port };
         _port = chosen;
+        if (!KnownPorts.Contains(chosen)) KnownPorts.Add(chosen);
 
         var arguments = new List<string>
         {
@@ -287,7 +517,42 @@ public static class Browser
             "--no-first-run",
             "--no-default-browser-check",
         };
-        if (!userProfile)
+
+        if (userProfile)
+        {
+            // The signed-in profile, reached through a junction so Chrome still opens the
+            // debug port. Chrome holds a lock on a profile in use, so it must not be running.
+            var link = JunctionPath(kind);
+            var error = EnsureJunction(link, UserDataDir(kind));
+            if (error is not null) return new JsonObject { ["ok"] = false, ["exit_code"] = 1, ["error"] = error };
+
+            var userBrowser = FindUserBrowser(kind); // their windows: everything that is not ours
+            if (userBrowser.Count > 0)
+            {
+                if (!restart)
+                    return new JsonObject
+                    {
+                        ["ok"] = false,
+                        ["exit_code"] = 409,
+                        ["error"] = "браузер уже запущен, а с занятым профилем порт не откроется",
+                        ["processes"] = userBrowser.Count,
+                        ["how_to"] = "передайте \"restart\": true — окна закроются штатно, а после запуска вернутся (--restore-last-session)",
+                    };
+                ClosePids(userBrowser, 20);
+                for (var attempt = 0; attempt < 20; attempt++)
+                {
+                    if (FindUserBrowser(kind).Count == 0) break;
+                    await Task.Delay(500);
+                }
+                if (FindUserBrowser(kind).Count > 0)
+                    return new JsonObject { ["ok"] = false, ["exit_code"] = 409, ["error"] = "браузер не закрылся — закройте окна вручную" };
+                await Task.Delay(1200); // профиль отпускает lockfile не мгновенно
+            }
+            arguments.Add("--user-data-dir=" + link);
+            arguments.Add("--profile-directory=Default");
+            arguments.Add("--restore-last-session");
+        }
+        else
         {
             // A dedicated profile: the user's own logins, cookies and tabs are not touched.
             var profileDir = Path.Combine(Paths.DataDir, "browser");
@@ -295,8 +560,18 @@ public static class Browser
             arguments.Add("--user-data-dir=" + profileDir);
             arguments.Add("--new-window");
         }
+
+        if (extensions is { Length: > 0 })
+        {
+            // Unpacked extensions for the automation profile: both flags are required in
+            // current Chrome, otherwise --load-extension is ignored.
+            var list = string.Join(",", extensions);
+            arguments.Add("--disable-extensions-except=" + list);
+            arguments.Add("--load-extension=" + list);
+        }
         if (headless) arguments.Add("--headless=new");
-        arguments.Add("about:blank");
+        // Their session comes back from --restore-last-session; a URL argument would replace it.
+        if (!userProfile) arguments.Add("about:blank");
 
         var info = new System.Diagnostics.ProcessStartInfo(exe)
         {
@@ -315,6 +590,8 @@ public static class Browser
             await Task.Delay(500);
             if (await ResolveBase(rescan: true) is { } ready)
             {
+                RememberMode(wantedMode);
+                SavePort(_port);
                 var version = JsonNode.Parse(await HttpText("/json/version") ?? "{}") as JsonObject;
                 return new JsonObject
                 {
@@ -322,7 +599,7 @@ public static class Browser
                     ["port"] = _port,
                     ["endpoint"] = ready,
                     ["browser"] = version?["Browser"]?.GetValue<string>(),
-                    ["profile"] = userProfile ? "пользователя" : "отдельный (PC-Bridge\\browser)",
+                    ["profile"] = userProfile ? "ваш (через junction)" : "отдельный (PC-Bridge\\browser)",
                     ["headless"] = headless,
                     ["exe"] = exe,
                 };
@@ -360,6 +637,51 @@ public static class Browser
         if (targets.Count == 0 && await HttpText("/json/version") is null)
             return new JsonObject { ["ok"] = false, ["exit_code"] = 503, ["error"] = "браузер не запущен — POST /browser/start" };
         return new JsonObject { ["ok"] = true, ["pages"] = targets };
+    }
+
+    /// Everything the browser runs, including extension workers — the quickest proof
+    /// that the signed-in profile with its extensions is the one attached.
+    public static async Task<JsonNode> AllTargets()
+    {
+        if (await HttpText("/json/version") is not { } versionText)
+            return new JsonObject { ["ok"] = false, ["exit_code"] = 503, ["error"] = "браузер не запущен — POST /browser/start" };
+        var version = JsonNode.Parse(versionText) as JsonObject;
+        var browserWs = version?["webSocketDebuggerUrl"]?.GetValue<string>();
+        if (browserWs is null) return new JsonObject { ["ok"] = false, ["exit_code"] = 1, ["error"] = "нет webSocketDebuggerUrl" };
+
+        var browser = await Page.ConnectAsync("browser", browserWs);
+        try
+        {
+            var answer = await browser.Send("Target.getTargets");
+            var list = new JsonArray();
+            var extensions = 0;
+            if (answer["result"]?["targetInfos"] is JsonArray infos)
+            {
+                foreach (var info in infos.OfType<JsonObject>())
+                {
+                    var url = info["url"]?.GetValue<string>() ?? "";
+                    var kind = info["type"]?.GetValue<string>() ?? "";
+                    if (url.StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase)) extensions++;
+                    if (kind is not ("page" or "background_page" or "service_worker" or "iframe")) continue;
+                    if (kind == "service_worker" && !url.StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase)) continue;
+                    list.Add(new JsonObject
+                    {
+                        ["id"] = info["targetId"]?.GetValue<string>(),
+                        ["type"] = kind,
+                        ["title"] = info["title"]?.GetValue<string>(),
+                        ["url"] = url.Length > 120 ? url[..120] : url,
+                    });
+                }
+            }
+            return new JsonObject
+            {
+                ["ok"] = true,
+                ["profile"] = CurrentMode() == "user" ? "ваш" : "отдельный",
+                ["extensions"] = extensions,
+                ["targets"] = list,
+            };
+        }
+        finally { browser.Dispose(); }
     }
 
     public static async Task<JsonNode> Open(string url, bool background)

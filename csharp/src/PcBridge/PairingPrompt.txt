@@ -67,6 +67,7 @@ created=<date>
 | POST | `/ui/read` | read the text of a window or a control |
 | POST | `/browser/start` | launch the automation browser (Chrome/Edge) with DevTools open |
 | GET | `/browser/status` `/browser/pages` | is it up, which tabs exist |
+| GET | `/browser/targets` | all targets incl. extension workers + which profile is attached |
 | POST | `/browser/open` | new tab: `{"url":"…"}` → `{"id":"…"}` |
 | POST | `/browser/navigate` `/browser/eval` `/browser/text` | go, run JS, read text |
 | POST | `/browser/click` `/browser/type` `/browser/key` `/browser/wait` | act on elements by CSS selector |
@@ -233,9 +234,39 @@ mouse and keyboard the user is holding.
 * Starts Chrome (or `"browser":"edge"`) with the DevTools protocol open on a free port and
   its **own profile** — the user's own logins, cookies and tabs are untouched. Safe to call
   when you need a page and there is no other way. `headless:true` opens no window at all.
-* `user_profile: true` uses the user's real Chrome profile (their logins) — ask first, and
-  Chrome must be fully closed or it will attach to nothing.
+  This profile has **no extensions and no sessions**: it looks like a fresh browser.
 * Call it once per session; `{"ok":true,"already_running":true}` means it is already up.
+
+### The user's own profile — logins and extensions
+
+By default the automation browser is a separate, empty profile. When the work needs the
+user's sign-ins, extensions or bookmarks:
+
+```json
+{"user_profile": true}
+→ {"ok":false,"exit_code":409,"error":"браузер уже запущен…","processes":23,
+   "how_to":"передайте \"restart\": true …"}
+
+{"user_profile": true, "restart": true}
+→ {"ok":true,"profile":"ваш (через junction)","browser":"Chrome/…"}
+```
+
+* `restart: true` closes **the user's own** browser windows the way ✕ does (it saves the
+  session), starts Chrome again on their real profile with `--restore-last-session`, and
+  their tabs come back. Anything typed into a form and not sent is lost — say so before
+  you pass this flag, it is a visible interruption.
+* Chrome 136+ refuses to open the debug port on the default profile path, so the bridge
+  reaches the same folder through a junction (`%LOCALAPPDATA%\PC-Bridge\chrome-user`):
+  same logins, same extensions, different path.
+* Attaching to an already running browser **without** a restart is impossible — the port
+  must be opened when the browser starts. That is a Chrome rule, not a bridge limitation.
+* Extensions for the *separate* profile can be passed as unpacked paths:
+  `{"extensions":["C:\\tools\\my-extension"]}`.
+* `GET /browser/targets` proves which profile is attached: `{"profile":"ваш","extensions":2}`
+  and lists extension workers and pages. Run it right after switching profiles instead of
+  guessing from a screenshot.
+* Their tabs are their tabs: do not close them, do not navigate a tab you did not open.
+  Prefer `{"background": true}` when opening a page next to what they are doing.
 
 Then, in one workflow:
 
