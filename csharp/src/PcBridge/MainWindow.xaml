@@ -61,18 +61,13 @@
               <Button x:Name="CardCopyButton" HorizontalAlignment="Right" VerticalAlignment="Top"
                       Width="24" Height="24" Margin="0,0,-26,0" Click="Copy_Click"
                       Style="{StaticResource IconButton}" ToolTip="Скопировать ключ и промпт">
-                <Viewbox Width="13" Height="13">
+                <Viewbox Width="14" Height="14">
                   <Canvas Width="16" Height="16">
-                    <!-- чистый силуэт «две страницы»: на 13 px скоба не читается, поэтому без неё -->
-                    <Path Stroke="{StaticResource Dim}" StrokeThickness="1.15" StrokeLineJoin="Round"
-                          Data="M3.4,2.5 H9.1 Q10.4,2.5 10.4,3.8 V11.6 Q10.4,12.9 9.1,12.9 H3.4 Q2.1,12.9 2.1,11.6 V3.8 Q2.1,2.5 3.4,2.5 Z"/>
-                    <Path Stroke="{StaticResource Dim}" StrokeThickness="1.15" StrokeLineJoin="Round"
-                          Fill="{StaticResource Panel}"
-                          Data="M6.9,4.9 H10.6 L13.9,8.2 V12.6 Q13.9,13.7 12.8,13.7 H6.9 Q5.8,13.7 5.8,12.6 V6.0 Q5.8,4.9 6.9,4.9 Z
-                                M10.6,4.9 V8.2 H13.9"/>
-                    <Path Stroke="{StaticResource Dim}" StrokeThickness="1.15"
-                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                          Data="M7.8,9.4 H11.6 M7.8,11.4 H11.6"/>
+                    <!-- как в присланной иконке: два скруглённых квадрата, задний перекрыт передним -->
+                    <Rectangle Canvas.Left="1.4" Canvas.Top="5.6" Width="7.0" Height="9.0" RadiusX="1.9" RadiusY="1.9"
+                               Stroke="{StaticResource Dim}" StrokeThickness="1.4"/>
+                    <Rectangle Canvas.Left="5.6" Canvas.Top="1.4" Width="9.0" Height="9.0" RadiusX="1.9" RadiusY="1.9"
+                               Fill="{StaticResource Panel}" Stroke="{StaticResource Dim}" StrokeThickness="1.4"/>
                   </Canvas>
                 </Viewbox>
               </Button>
