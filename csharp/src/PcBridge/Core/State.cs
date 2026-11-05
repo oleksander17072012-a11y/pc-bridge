@@ -72,7 +72,7 @@ public sealed class AppState
 
     public JsonObject Snapshot() => new()
     {
-        ["version"] = "3.5.3",
+        ["version"] = "3.6.0",
         ["hostname"] = Hostname,
         ["port"] = Relay.Port,
         ["tunnel_url"] = Tunnel.Url,
