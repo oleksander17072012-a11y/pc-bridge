@@ -9,7 +9,8 @@ public sealed class AppState
     public required Tunnel Tunnel { get; init; }
     public required Jobs Jobs { get; init; }
     public PlanBoard Plan { get; } = new();
-    public required string Key { get; init; }
+    private string _key = string.Empty;
+    public string Key { get { lock (_lock) return _key; } init { _key = value; } }
     public string Hostname { get; } = Environment.MachineName;
     public string StartedAt { get; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
     public DateTime StartedUtc { get; } = DateTime.UtcNow;
@@ -27,6 +28,17 @@ public sealed class AppState
     public string? Stage { get { lock (_lock) return _stage; } }
 
     public void SetActive(bool active) { lock (_lock) _active = active; }
+
+    /// A new key: the old one stops working the moment this returns, every paired chat has to be
+    /// given the fresh block. The pairing file is rewritten at once, so screen and file agree.
+    public string RotateKey()
+    {
+        var fresh = Keys.NewKey();
+        lock (_lock) _key = fresh;
+        WriteKeyFile();
+        Journal.Push("ui", "создан новый ключ доступа");
+        return fresh;
+    }
     public long BumpCommands() { lock (_lock) return ++_commands; }
     public long BumpNotes() { lock (_lock) return ++_notes; }
     public long CommandCount { get { lock (_lock) return _commands; } }
@@ -72,7 +84,7 @@ public sealed class AppState
 
     public JsonObject Snapshot() => new()
     {
-        ["version"] = "3.6.0",
+        ["version"] = "3.6.1",
         ["hostname"] = Hostname,
         ["port"] = Relay.Port,
         ["tunnel_url"] = Tunnel.Url,

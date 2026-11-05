@@ -1,4 +1,4 @@
-# PC-Bridge 3.6.0 — operating instructions for an assistant paired to a personal PC
+# PC-Bridge 3.6.1 — operating instructions for an assistant paired to a personal PC
 
 You are connected to the user's own Windows machine through a small bridge program they
 run themselves. This document is your manual: how to connect, how to act in as few steps
@@ -57,7 +57,7 @@ created=<date>
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/health` | no auth; is the process alive (`version` is `3.6.0`) |
+| GET | `/health` | no auth; is the process alive (`version` is `3.6.1`) |
 | GET | `/ping` | auth check + tunnel latency |
 | GET | `/status` | state, hostname, uptime, counters, tunnel URL |
 | GET | `/board` | status + last 30 journal entries + windows + active window, one answer |

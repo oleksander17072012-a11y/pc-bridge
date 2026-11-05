@@ -18,7 +18,7 @@ public partial class App : Application
         };
 
         var journal = new Journal(Paths.LogFile);
-        journal.Push("boot", "PC-Bridge 3.6.0 стартует");
+        journal.Push("boot", "PC-Bridge 3.6.1 стартует");
 
         var key = LoadOrCreateKey();
         var jobs = new Jobs();
@@ -28,7 +28,10 @@ public partial class App : Application
         {
             try
             {
-                var text = $"PC-BRIDGE-PAIRING v1\nurl={url}\nkey={key}\ncreated={DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+                // State is alive by the time the tunnel reports a URL; read the key from it, so a
+                // rotated key is never overwritten with the one we started with.
+                var current = State?.Key ?? key;
+                var text = $"PC-BRIDGE-PAIRING v1\nurl={url}\nkey={current}\ncreated={DateTime.Now:yyyy-MM-dd HH:mm:ss}";
                 File.WriteAllText(Paths.KeyFile, text);
             }
             catch { }

@@ -248,6 +248,17 @@ public partial class MainWindow : Window
 
     private void Tunnel_Click(object sender, RoutedEventArgs e) => App.State.Tunnel.Restart();
 
+    /// A new key invalidates the old one immediately: chats paired with it lose access.
+    private void NewKey_Click(object sender, RoutedEventArgs e)
+    {
+        var answer = MessageBox.Show(
+            "Старый ключ перестанет работать сразу: всё, что подключено с ним, потеряет доступ и потребует новый блок.\n\nСоздать новый ключ?",
+            "PC-Bridge", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes) return;
+        App.State.RotateKey();
+        Refresh();
+    }
+
     private void Pause_Click(object sender, RoutedEventArgs e)
     {
         var next = !App.State.Active;
